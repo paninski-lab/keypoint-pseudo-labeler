@@ -1,0 +1,17 @@
+# absolute path to lp yaml file
+lightning_pose_config: null
+
+# size of initial ensemble
+n_ensemble_base: 5
+
+# number of pseudo-labels to select for next round of training
+n_pseudo_labels: 1000
+
+# pseudo-labeler algorithm (eks, hand, eventually other baselines)
+pseudo_labeler: eks
+
+# we pseudo-label all frames in all videos - how to select the final frames?
+selection_strategy: random
+
+# size of final ensemble (>1 means we can compare ensemble variance across both rounds)
+n_ensemble_final: 5

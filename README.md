@@ -2,7 +2,7 @@
 Use EKS as a pseudo-labeler to accelerate pose estimation projects.
 
 
-### Installation
+## Installation
 
 **Install `ffmpeg`**
 
@@ -50,4 +50,10 @@ git clone https://github.com/paninski-lab/keypoint-pseudo-labeler.git
 cd keypoint-pseudo-labeler
 pip install -e .
 cd ..
+```
+
+## Use
+
+```
+python pipelines/run_pipeline.py --config <path_to_pipeline_config> 
 ```
