@@ -1,8 +1,17 @@
 # absolute path to lp yaml file
 lightning_pose_config: null
 
-# size of initial ensemble
-n_ensemble_base: 5
+# initial ensemble seeds
+init_ensemble_seeds:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+
+video_directories:
+  - videos
+  - videos_new
 
 # number of pseudo-labels to select for next round of training
 n_pseudo_labels: 1000
@@ -14,4 +23,4 @@ pseudo_labeler: eks
 selection_strategy: random
 
 # size of final ensemble (>1 means we can compare ensemble variance across both rounds)
-n_ensemble_final: 5
+final_ensemble_seeds: 5
