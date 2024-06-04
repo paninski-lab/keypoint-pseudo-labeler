@@ -1,6 +1,9 @@
 # absolute path to lp yaml file
 lightning_pose_config: null
 
+# pose estimation data type
+data_type: lp
+
 # initial ensemble seeds
 init_ensemble_seeds:
   - 0
@@ -12,6 +15,10 @@ init_ensemble_seeds:
 video_directories:
   - videos
   - videos_new
+
+# EKS smoothing parameter optimization frames
+
+eks_s_frames: [(,)]
 
 # number of pseudo-labels to select for next round of training
 n_pseudo_labels: 1000

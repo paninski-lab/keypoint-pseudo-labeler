@@ -8,6 +8,19 @@ from omegaconf import DictConfig
 from pseudo_labeler.train import train
 
 
+'''EKS imports'''
+import sys
+import os
+import numpy as np
+
+# Using a local path for now, edit this
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
+
+from eks.utils import format_data, populate_output_dataframe
+from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
+from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
+
+
 def pipeline(config_file: str):
 
     # load pipeline config file
@@ -47,8 +60,74 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
     # -------------------------------------------------------------------------------------
-    # keemin is the expert here
-    # again, will need to be careful with directory organization
+    input_dir = vid_data  # = output from previous step
+    os.makedirs(results_dir, exist_ok=True)  # can be removed later (if results_dir exists)
+    data_type = cfg["data_type"]
+    output_df = None
+
+    if cfg["pseudo_labeler"] == "eks":
+        save_filename = "EKS_output"
+        bodypart_list = cfg_lp["keypoint_names"]
+        s = None  # always optimize s
+        s_frames = cfg["eks_s_frames"]  # frames used for optimizing s, all by default
+        jax = "True"  # always use JAX acceleration for now
+
+        # Load and format input files and prepare an empty DataFrame for output.
+        input_dfs, output_df, _ = format_data(input_dir, data_type)  # check compatibility later
+        print('Input data has been read into EKS.')
+
+        ''' This region should be identical to EKS singlecam script '''
+        # Convert list of DataFrames to a 3D NumPy array
+        data_arrays = [df.to_numpy() for df in input_dfs]
+        markers_3d_array = np.stack(data_arrays, axis=0)
+
+        # Map keypoint names to keys in input_dfs and crop markers_3d_array
+        keypoint_is = {}
+        keys = []
+        for i, col in enumerate(input_dfs[0].columns):
+            keypoint_is[col] = i
+        for part in bodypart_list:
+            keys.append(keypoint_is[part + '_x'])
+            keys.append(keypoint_is[part + '_y'])
+            keys.append(keypoint_is[part + '_likelihood'])
+        key_cols = np.array(keys)
+        markers_3d_array = markers_3d_array[:, :, key_cols]
+
+        # Initialize
+        df_dicts, s_finals, nll_values = [], [], []
+
+        # Call the smoother function
+        if jax == "True":
+            df_dicts, s_finals, nll_values_array = jax_ensemble_kalman_smoother_single_view(
+                markers_3d_array,
+                bodypart_list,
+                s,
+                s_frames
+            )
+        else:
+            df_dicts, s_finals, nll_values_array = vectorized_ensemble_kalman_smoother_single_view(
+                markers_3d_array,
+                bodypart_list,
+                s,
+                s_frames
+            )
+        ''' end of identical region '''
+
+        # Save eks results in new DataFrames and .csv output files
+        for k in range(len(bodypart_list)):
+            df = df_dicts[k][bodypart_list[k] + '_df']
+            output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
+            save_filename = save_filename or f'singlecam_{s_finals[k]}.csv'
+            output_df.to_csv(os.path.join(results_dir, save_filename))
+
+        print("EKS DataFrame output successfully converted to CSV")
+
+    else:
+        output_df = input_dir
+        # other baseline pseudolaber implementation
+
+    ''' Output from EKS can be csv or DataFrame, whatever is easier for the next step '''
+
 
     # -------------------------------------------------------------------------------------
     # select frames to add to the dataset
