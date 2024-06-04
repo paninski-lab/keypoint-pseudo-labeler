@@ -2,10 +2,12 @@
 
 import gc
 import os
+import random
 import shutil
 from typing import Optional
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 from lightning_pose.utils import pretty_print_cfg, pretty_print_str
 from lightning_pose.utils.io import (
@@ -34,6 +36,15 @@ def train(cfg: DictConfig, results_dir: str) -> None:
     pwd = os.getcwd()
     os.makedirs(results_dir, exist_ok=True)
     os.chdir(results_dir)
+
+    # reset all seeds
+    seed = 0
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
     # ----------------------------------------------------------------------------------
     # set up data/model objects
