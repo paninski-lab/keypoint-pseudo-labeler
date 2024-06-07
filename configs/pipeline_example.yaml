@@ -40,12 +40,3 @@ selection_strategy: random
 final_ensemble_seeds: 5
 
 config_mirror-mouse: /path/to/mirror-mouse-config.yaml
-
-data:
-  data_dir: /tmp/data
-
-training:
-  rng_seed_data_pt: null
-  max_steps: 30000
-  min_steps: 10000
-  unfreeze_step: 300
