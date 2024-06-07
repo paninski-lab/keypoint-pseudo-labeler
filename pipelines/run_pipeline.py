@@ -1,44 +1,49 @@
 """Example pipeline script."""
 
+#%%
 import argparse
-
 import yaml
 from omegaconf import DictConfig
-
-from pseudo_labeler.train import train
-
-
-'''EKS imports'''
 import sys
 import os
 import numpy as np
-
-# Using a local path for now, edit this
+from pseudo_labeler.train import train
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import format_data, populate_output_dataframe
-from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
-from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
+# from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
+# from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
 
-
+#%%
 def pipeline(config_file: str):
 
     # load pipeline config file
     cfg = yaml.safe_load(open(config_file, "r"))
-
+    data_dir = cfg.get("data", {}).get("data_dir", "/tmp/data")
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
     # -------------------------------------------------------------------------------------
     # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
     # -------------------------------------------------------------------------------------
     print(f'training {len(cfg["init_ensemble_seeds"])} baseline models')
     for k in cfg["init_ensemble_seeds"]:
         # load lightning pose config file
-        cfg_lp = use omega conf to load
-        # - update data.data_dir, maybe some other paths
-        # - update training.rng_seed_data_pt
-        # - add iteration-specific fields to the config
+        cfg_lp = DictConfig(cfg["lightning_pose_config"])
 
+        # update data.data_dir, maybe some other paths
+        # cfg_lp.data.data_dir = cfg["data_dir"]
+        cfg_lp.data.data_dir = data_dir
+        # update training seeds
+        cfg_lp.training.rng_seed_data_pt = k
+        
+        # add iteration-specific fields to the config
+        cfg_lp.training.max_steps = 30000
+        cfg_lp.training.min_steps = 10000
+        cfg_lp.training.unfreeze_step = 300
+        
         # define the output directory
-        results_dir = todo
+        results_dir = f"mirror-mouse/100_1000-eks-random/rng{k}"
+        os.makedirs(results_dir, exist_ok=True)
         """
         mirror-mouse/100_1000-eks-random/rng0
         mirror-mouse/100_1000-eks-random/rng1
@@ -50,7 +55,7 @@ def pipeline(config_file: str):
         # train model
         # if we run inference on videos inside train(), then we should pass a list of video
         # directories to loop over; these should probably be stored in pipeline config file
-        train(cfg=cfg_lp, results_dir=results_dir)
+        # train(cfg=cfg_lp, results_dir=results_dir)
 
     # -------------------------------------------------------------------------------------
     # run inference on all InD/OOD videos and compute unsupervised metrics
@@ -169,7 +174,8 @@ def pipeline(config_file: str):
 
 
 if __name__ == "__main__":
-
+    # config_file = "../configs/pipeline_example.yaml"
+    # pipeline(config_file)
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--config',
@@ -179,3 +185,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     pipeline(args.config)
+
+# %%

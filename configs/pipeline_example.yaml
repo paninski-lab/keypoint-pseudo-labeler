@@ -1,5 +1,12 @@
 # absolute path to lp yaml file
-lightning_pose_config: null
+lightning_pose_config:
+  data:
+    data_dir: null
+  training:
+    rng_seed_data_pt: null
+    max_steps: 30000
+    min_steps: 10000
+    unfreeze_step: 300
 
 # pose estimation data type
 data_type: lp
@@ -31,3 +38,14 @@ selection_strategy: random
 
 # size of final ensemble (>1 means we can compare ensemble variance across both rounds)
 final_ensemble_seeds: 5
+
+config_mirror-mouse: /path/to/mirror-mouse-config.yaml
+
+data:
+  data_dir: /tmp/data
+
+training:
+  rng_seed_data_pt: null
+  max_steps: 30000
+  min_steps: 10000
+  unfreeze_step: 300
