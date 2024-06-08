@@ -8,7 +8,7 @@ data:
     height: 256
     width: 256
   # ABSOLUTE path to data directory
-  data_dir: todo
+  data_dir: null
   # ABSOLUTE path to unlabeled videos' directory
   video_dir: todo
   # location of labels; for example script, this should be relative to `data_dir`
