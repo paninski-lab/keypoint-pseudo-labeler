@@ -101,9 +101,20 @@ def train(cfg: DictConfig, results_dir: str) -> None:
 
     # save config file
     cfg_file_local = os.path.join(results_dir, "config.yaml")
-    with open(cfg_file_local, "w") as fp:
-        OmegaConf.save(config=cfg, f=fp.name)
+    # with open(cfg_file_local, "w") as fp:
+    #     OmegaConf.save(config=cfg, f=fp.name)
 
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(cfg_file_local), exist_ok=True)
+    
+    # Save the configuration file
+    try:
+        with open(cfg_file_local, "w") as fp:
+            OmegaConf.save(config=cfg, f=fp.name)
+        print(f"Configuration saved to {cfg_file_local}")
+    except OSError as e:
+        print(f"Error creating directory or writing file: {e}")
+    
     # ----------------------------------------------------------------------------------
     # post-training analysis: labeled frames
     # ----------------------------------------------------------------------------------
