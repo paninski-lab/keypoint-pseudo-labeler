@@ -40,9 +40,9 @@ def pipeline(config_file: str):
         cfg_lp.training.rng_seed_data_pt = k
         
         # add iteration-specific fields to the config
-        cfg_lp.training.max_steps = 30000
-        cfg_lp.training.min_steps = 10000
-        cfg_lp.training.unfreeze_step = 300
+        cfg_lp.training.max_steps = 300
+        cfg_lp.training.min_steps = 100
+        cfg_lp.training.unfreeze_step = 30
         
         # define the output directory
         results_dir = f"mirror-mouse/100_1000-eks-random/rng{k}"
