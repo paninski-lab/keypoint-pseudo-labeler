@@ -8,9 +8,9 @@ data:
     height: 256
     width: 256
   # ABSOLUTE path to data directory
-  data_dir: null
-  # ABSOLUTE path to unlabeled videos' directory
-  video_dir: todo
+  data_dir: /teamspace/studios/this_studio/keypoint-pseudo-labeler/data
+  # ABSOLUTE path to unlabeled videos' directory. the below is just a toy example for running Getting Started scripts
+  video_dir: videos
   # location of labels; for example script, this should be relative to `data_dir`
   csv_file: CollectedData.csv
   # downsample heatmaps - 2 | 3

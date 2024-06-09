@@ -58,7 +58,7 @@ def pipeline(config_file: str):
         # train model
         # if we run inference on videos inside train(), then we should pass a list of video
         # directories to loop over; these should probably be stored in pipeline config file
-        # train(cfg=cfg_lp, results_dir=results_dir)
+        train(cfg=cfg_lp, results_dir=results_dir)
 
     # -------------------------------------------------------------------------------------
     # run inference on all InD/OOD videos and compute unsupervised metrics
