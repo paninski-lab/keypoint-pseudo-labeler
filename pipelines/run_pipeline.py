@@ -11,6 +11,7 @@ from pseudo_labeler.train import train
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import format_data, populate_output_dataframe
+# from pseudo_labeler import VIDEO_PREDS_DIR
 # from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
 # from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
 
@@ -36,17 +37,22 @@ def pipeline(config_file: str):
     for k in cfg["init_ensemble_seeds"]:
         
         cfg_lp.data.data_dir = data_dir
+        
         # update training seeds
         cfg_lp.training.rng_seed_data_pt = k
         
         # add iteration-specific fields to the config
-        cfg_lp.training.max_steps = 300
-        cfg_lp.training.min_steps = 100
+        cfg_lp.training.max_epochs = 10
+        cfg_lp.training.min_epochs = 10
         cfg_lp.training.unfreeze_step = 30
         
-        # define the output directory
-        results_dir = f"mirror-mouse/100_1000-eks-random/rng{k}"
+        # define the output directory - the name below should come from (fully generated from) config file configuration
+        #result_dir should be an absolute path
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(script_dir)
+        results_dir = os.path.join(parent_dir, f"outputs/mirror-mouse/100_1000-eks-random/rng{k}")
         os.makedirs(results_dir, exist_ok=True)
+        
         """
         mirror-mouse/100_1000-eks-random/rng0
         mirror-mouse/100_1000-eks-random/rng1
@@ -63,7 +69,21 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------
     # run inference on all InD/OOD videos and compute unsupervised metrics
     # -------------------------------------------------------------------------------------
-    # this is actually already in the train function - do we want to split it?
+        # this is actually already in the train function - do we want to split it?
+        #iterate through all the videos in the video_dir in pipeline_example.yaml
+        # for all viedos direcotyr  in pipeline_example.yaml
+            #os.list.dir and os.path.join (config.lp.data_dir)
+            #run inference with metrics from train.py
+            
+            # inference_with_metrics(
+            #     video_file: str,
+            #     cfg: DictConfig, #config_lp instead of DictConfig
+            #     preds_file: str, #name of the file that we save the result result/videos_pred/vide_name.csv
+            #     ckpt_file: Optional[str] = None, # pass the model itself. have the train function return the actual model
+            #     data_module: Optional[callable] = None, # similar to above. have train.py returns those things
+            #     trainer: Optional[pl.Trainer] = None, # similar to above. have train.py returns those things.
+            #     metrics: bool = True,
+            # ) -> pd.DataFrame:
 
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
