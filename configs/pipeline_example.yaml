@@ -13,6 +13,8 @@ init_ensemble_seeds:
   # - 4
 
 video_directories:
+  # - /teamspace/studios/this_studio/data/mirror-mouse/videos_test
+  # - /teamspace/studios/this_studio/data/mirror-mouse/videos_test_new
   - videos_test
   - videos_test_new
 

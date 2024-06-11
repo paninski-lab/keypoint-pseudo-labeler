@@ -64,26 +64,42 @@ def pipeline(config_file: str):
         # train model
         # if we run inference on videos inside train(), then we should pass a list of video
         # directories to loop over; these should probably be stored in pipeline config file
-        train(cfg=cfg_lp, results_dir=results_dir)
+        # train(cfg=cfg_lp, results_dir=results_dir)
+        
 
     # -------------------------------------------------------------------------------------
     # run inference on all InD/OOD videos and compute unsupervised metrics
     # -------------------------------------------------------------------------------------
         # this is actually already in the train function - do we want to split it?
-        #iterate through all the videos in the video_dir in pipeline_example.yaml
-        # for all viedos direcotyr  in pipeline_example.yaml
-            #os.list.dir and os.path.join (config.lp.data_dir)
-            #run inference with metrics from train.py
+        # iterate through all the videos in the video_dir in pipeline_example.yaml
+        for video_dir in cfg["video_directories"]:
+            full_video_dir = os.path.join(data_dir, video_dir)
+            print(f"Running inference on {full_video_dir}")
+            # run inference with metrics from train.py
+            results_df = train.inference_with_metrics(
+                video_file=full_video_dir,
+                cfg=cfg_lp,
+                preds_file=os.path.join(results_dir, f"{video_dir}.csv"),
+                # ckpt_file=None,
+                ckpt_file=os.path.join(results_dir, "model.ckpt"),
+                data_module=None,
+                trainer=None,
+                metrics=True,
+            )
             
-            # inference_with_metrics(
-            #     video_file: str,
-            #     cfg: DictConfig, #config_lp instead of DictConfig
-            #     preds_file: str, #name of the file that we save the result result/videos_pred/vide_name.csv
-            #     ckpt_file: Optional[str] = None, # pass the model itself. have the train function return the actual model
-            #     data_module: Optional[callable] = None, # similar to above. have train.py returns those things
-            #     trainer: Optional[pl.Trainer] = None, # similar to above. have train.py returns those things.
-            #     metrics: bool = True,
-            # ) -> pd.DataFrame:
+        
+        
+        #     run inference with metrics from train.py
+            
+        #     inference_with_metrics(
+        #         video_file: str,
+        #         cfg: DictConfig, #config_lp instead of DictConfig
+        #         preds_file: str, #name of the file that we save the result result/videos_pred/vide_name.csv
+        #         ckpt_file: Optional[str] = None, # pass the model itself. have the train function return the actual model
+        #         data_module: Optional[callable] = None, # similar to above. have train.py returns those things
+        #         trainer: Optional[pl.Trainer] = None, # similar to above. have train.py returns those things.
+        #         metrics: bool = True,
+        #     ) -> pd.DataFrame:
 
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
