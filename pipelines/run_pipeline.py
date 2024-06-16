@@ -7,7 +7,9 @@ from omegaconf import DictConfig
 import sys
 import os
 import numpy as np
-from pseudo_labeler.train import train
+from pseudo_labeler.train import train, inference_with_metrics
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import format_data, populate_output_dataframe
@@ -42,8 +44,10 @@ def pipeline(config_file: str):
         cfg_lp.training.rng_seed_data_pt = k
         
         # add iteration-specific fields to the config
-        cfg_lp.training.max_epochs = 10
-        cfg_lp.training.min_epochs = 10
+        # cfg_lp.training.max_epochs = 10
+        # cfg_lp.training.min_epochs = 10
+        cfg_lp.training.max_steps = 64
+        cfg_lp.training.min_steps = 64
         cfg_lp.training.unfreeze_step = 30
         
         # define the output directory - the name below should come from (fully generated from) config file configuration
@@ -65,7 +69,7 @@ def pipeline(config_file: str):
         # if we run inference on videos inside train(), then we should pass a list of video
         # directories to loop over; these should probably be stored in pipeline config file
         # train(cfg=cfg_lp, results_dir=results_dir)
-        
+        best_ckpt, data_module, trainer = train(cfg=cfg_lp, results_dir=results_dir)
 
     # -------------------------------------------------------------------------------------
     # run inference on all InD/OOD videos and compute unsupervised metrics
@@ -73,33 +77,20 @@ def pipeline(config_file: str):
         # this is actually already in the train function - do we want to split it?
         # iterate through all the videos in the video_dir in pipeline_example.yaml
         for video_dir in cfg["video_directories"]:
-            full_video_dir = os.path.join(data_dir, video_dir)
-            print(f"Running inference on {full_video_dir}")
-            # run inference with metrics from train.py
-            results_df = train.inference_with_metrics(
-                video_file=full_video_dir,
-                cfg=cfg_lp,
-                preds_file=os.path.join(results_dir, f"{video_dir}.csv"),
-                # ckpt_file=None,
-                ckpt_file=os.path.join(results_dir, "model.ckpt"),
-                data_module=None,
-                trainer=None,
-                metrics=True,
-            )
-            
-        
-        
-        #     run inference with metrics from train.py
-            
-        #     inference_with_metrics(
-        #         video_file: str,
-        #         cfg: DictConfig, #config_lp instead of DictConfig
-        #         preds_file: str, #name of the file that we save the result result/videos_pred/vide_name.csv
-        #         ckpt_file: Optional[str] = None, # pass the model itself. have the train function return the actual model
-        #         data_module: Optional[callable] = None, # similar to above. have train.py returns those things
-        #         trainer: Optional[pl.Trainer] = None, # similar to above. have train.py returns those things.
-        #         metrics: bool = True,
-        #     ) -> pd.DataFrame:
+            video_files = os.listdir(os.path.join(data_dir, video_dir))
+            for video_file in video_files:
+                results_df = inference_with_metrics(
+                    video_file=os.path.join(data_dir, video_dir, video_file),
+                    cfg=cfg_lp,
+                    preds_file=os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv")),
+                    ckpt_file=best_ckpt,
+                    # model=model,
+                    # ckpt_file=os.path.join(results_dir, "model.ckpt"),
+                    data_module=data_module,
+                    trainer=trainer,
+                    metrics=True,
+                )
+
 
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos

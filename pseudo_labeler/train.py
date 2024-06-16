@@ -9,6 +9,8 @@ import pandas as pd
 import lightning.pytorch as pl
 import numpy as np
 import torch
+from typing import Dict, List, Optional, Union
+from typing import Tuple
 from lightning_pose.utils import pretty_print_cfg, pretty_print_str
 from lightning_pose.utils.io import (
     check_video_paths,
@@ -19,7 +21,7 @@ from lightning_pose.utils.predictions import predict_dataset, predict_single_vid
 from lightning_pose.utils.scripts import (
     calculate_train_batches,
     compute_metrics,
-    get_callbacks,
+    # get_callbacks,
     get_data_module,
     get_dataset,
     get_imgaug_transform,
@@ -28,10 +30,61 @@ from lightning_pose.utils.scripts import (
 )
 from moviepy.editor import VideoFileClip
 from omegaconf import DictConfig, OmegaConf
+from typeguard import typechecked
+
+@typechecked
+def get_callbacks(
+    cfg: DictConfig,
+    early_stopping=True,
+    lr_monitor=True,
+    ckpt_model=True,
+    backbone_unfreeze=True,
+) -> List:
+
+    callbacks = []
+
+    if early_stopping:
+        early_stopping = pl.callbacks.EarlyStopping(
+            monitor="val_supervised_loss",
+            patience=cfg.training.early_stop_patience,
+            mode="min",
+        )
+        callbacks.append(early_stopping)
+    if lr_monitor:
+        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch")
+        callbacks.append(lr_monitor)
+    if ckpt_model:
+        if early_stopping:
+            ckpt_callback = pl.callbacks.model_checkpoint.ModelCheckpoint(
+                monitor="val_supervised_loss"
+            )
+        else:
+            # we might not have validation data, make sure we ckpt only on last epoch
+            ckpt_callback = pl.callbacks.model_checkpoint.ModelCheckpoint(monitor=None)
+        callbacks.append(ckpt_callback)
+    if backbone_unfreeze:
+        transfer_unfreeze_callback = pl.callbacks.BackboneFinetuning(
+            # unfreeze_backbone_at_epoch= None, # cfg.training.unfreezing_epoch
+            unfreeze_backbone_at_epoch=cfg.training.unfreeze_step,
+            lambda_func=lambda epoch: 1.5,
+            backbone_initial_ratio_lr=0.1,
+            should_align=True,
+            train_bn=True,
+        )
+        callbacks.append(transfer_unfreeze_callback)
+    # we just need this callback for unsupervised models
+    if (cfg.model.losses_to_use != []) and (cfg.model.losses_to_use is not None):
+        anneal_weight_callback = AnnealWeight(**cfg.callbacks.anneal_weight)
+        callbacks.append(anneal_weight_callback)
+
+    return callbacks
 
 
-def train(cfg: DictConfig, results_dir: str) -> None:
+def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
+    data_module = None
+    trainer = None
+    
     # mimic hydra, change dir into results dir
     pwd = os.getcwd()
     os.makedirs(results_dir, exist_ok=True)
@@ -77,6 +130,11 @@ def train(cfg: DictConfig, results_dir: str) -> None:
     logger = pl.loggers.TensorBoardLogger("tb_logs", name=cfg.model.model_name)
 
     # early stopping, learning rate monitoring, model checkpointing, backbone unfreezing
+    # copy tget_callbacks from lightning_pose and set in train.py. there's some epochs and steps need to change
+    # don't import from lightning pose, copy paste that function to here.
+    # go through indivudal callbacks function, change anything from epocns to steps.
+    # make sure that getting similar results whether we train with all the steps or epochs
+    # there'll be some comparison to do
     callbacks = get_callbacks(cfg, early_stopping=False)
 
     # calculate number of batches for both labeled and unlabeled data per epoch
@@ -87,10 +145,13 @@ def train(cfg: DictConfig, results_dir: str) -> None:
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        max_epochs=cfg.training.max_epochs,
-        min_epochs=cfg.training.min_epochs,
+        # max_epochs=cfg.training.max_epochs,
+        # min_epochs=cfg.training.min_epochs,
+        max_steps=cfg.training.max_steps,
+        min_steps=cfg.training.min_steps,
         check_val_every_n_epoch=cfg.training.check_val_every_n_epoch,
         log_every_n_steps=cfg.training.log_every_n_steps,
+        
         callbacks=callbacks,
         logger=logger,
         limit_train_batches=limit_train_batches,
@@ -107,20 +168,13 @@ def train(cfg: DictConfig, results_dir: str) -> None:
     # Ensure the directory exists
     os.makedirs(os.path.dirname(cfg_file_local), exist_ok=True)
     
-    # Save the configuration file
-    # try:
-    #     with open(cfg_file_local, "w") as fp:
-    #         OmegaConf.save(config=cfg, f=fp.name)
-    #     print(f"Configuration saved to {cfg_file_local}")
-    # except OSError as e:
-    #     print(f"Error creating directory or writing file: {e}")
-    
     # ----------------------------------------------------------------------------------
     # post-training analysis: labeled frames
     # ----------------------------------------------------------------------------------
     hydra_output_directory = os.getcwd()
     print("Hydra output directory: {}".format(hydra_output_directory))
     # get best ckpt
+    
     best_ckpt = os.path.abspath(trainer.checkpoint_callback.best_model_path)
     # check if best_ckpt is a file
     if not os.path.isfile(best_ckpt):
@@ -237,14 +291,15 @@ def train(cfg: DictConfig, results_dir: str) -> None:
     # clean up memory
     del imgaug_transform
     del dataset
-    del data_module
+    # del data_module
     del data_module_pred
     del loss_factories
     del model
-    del trainer
+    # del trainer
     gc.collect()
     torch.cuda.empty_cache()
-
+    
+    return best_ckpt, data_module, trainer
 
 def inference_with_metrics(
     video_file: str,
