@@ -46,6 +46,7 @@ def pipeline(config_file: str):
         # add iteration-specific fields to the config
         # cfg_lp.training.max_epochs = 10
         # cfg_lp.training.min_epochs = 10
+        # update version that works
         cfg_lp.training.max_steps = 64
         cfg_lp.training.min_steps = 64
         cfg_lp.training.unfreeze_step = 30
