@@ -51,12 +51,14 @@ def get_callbacks(
         )
         callbacks.append(early_stopping)
     if lr_monitor:
-        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch")
+        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step") #TODO: check with Matt
         callbacks.append(lr_monitor)
     if ckpt_model:
         if early_stopping:
             ckpt_callback = pl.callbacks.model_checkpoint.ModelCheckpoint(
+                # TODO:check with Matt -  every_n_train_steps = cfg.training.every_n_train_steps ,
                 monitor="val_supervised_loss"
+                
             )
         else:
             # we might not have validation data, make sure we ckpt only on last epoch
@@ -64,8 +66,7 @@ def get_callbacks(
         callbacks.append(ckpt_callback)
     if backbone_unfreeze:
         transfer_unfreeze_callback = pl.callbacks.BackboneFinetuning(
-            # unfreeze_backbone_at_epoch= None, # cfg.training.unfreezing_epoch
-            unfreeze_backbone_at_epoch=cfg.training.unfreeze_step,
+            unfreeze_backbone_at_epoch=cfg.training.unfreezing_epoch,
             lambda_func=lambda epoch: 1.5,
             backbone_initial_ratio_lr=0.1,
             should_align=True,
