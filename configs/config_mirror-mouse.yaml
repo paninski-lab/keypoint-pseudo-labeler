@@ -55,7 +55,7 @@ training:
   # dlc-top-down- dlc augmentations plus vertical and horizontal flips
   imgaug: dlc
   # batch size of labeled data during training
-  train_batch_size: 8
+  train_batch_size: 10 #Tommy: original val 8
   # batch size of labeled data during validation
   val_batch_size: 48
   # batch size of labeled data during test
@@ -76,8 +76,8 @@ training:
   # epoch at which backbone network weights begin updating
   unfreezing_epoch: 0 #20
   # max training epochs; training may exit before due to early stopping
-  min_epochs: 300
-  max_epochs: 300
+  min_epochs: 100
+  max_epochs: 100
   # frequency to log training metrics (one step is one batch)
   log_every_n_steps: 10
   # frequency to log validation metrics

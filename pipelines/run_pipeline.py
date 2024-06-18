@@ -44,6 +44,7 @@ def pipeline(config_file: str):
         cfg_lp.training.rng_seed_data_pt = k
         
         # add iteration-specific fields to the config
+        #translate number of steps into numbers of epoch
         cfg_lp.training.max_epochs = 10
         cfg_lp.training.min_epochs = 10
         # update version that works
@@ -55,7 +56,7 @@ def pipeline(config_file: str):
         #result_dir should be an absolute path
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
-        results_dir = os.path.join(parent_dir, f"outputs/mirror-mouse/100_1000-eks-random/rng{k}")
+        results_dir = os.path.join(parent_dir, f"../outputs/mirror-mouse/100_1000-eks-random/rng{k}")
         os.makedirs(results_dir, exist_ok=True)
         
         """
@@ -70,11 +71,14 @@ def pipeline(config_file: str):
         # if we run inference on videos inside train(), then we should pass a list of video
         # directories to loop over; these should probably be stored in pipeline config file
         # train(cfg=cfg_lp, results_dir=results_dir)
+
+        #TODO: Tommy - make more argument to train, max step min step, milestone, etc. pass
+        #information from pipeline config which we call cfg. 
         best_ckpt, data_module, trainer = train(cfg=cfg_lp, results_dir=results_dir)
 
-    # -------------------------------------------------------------------------------------
-    # run inference on all InD/OOD videos and compute unsupervised metrics
-    # -------------------------------------------------------------------------------------
+        # -------------------------------------------------------------------------------------
+        # run inference on all InD/OOD videos and compute unsupervised metrics
+        # -------------------------------------------------------------------------------------
         # this is actually already in the train function - do we want to split it?
         # iterate through all the videos in the video_dir in pipeline_example.yaml
         for video_dir in cfg["video_directories"]:
@@ -168,10 +172,42 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
     # # -------------------------------------------------------------------------------------
+    # # TODO: 
     # print(
     #     f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
     #     f'({cfg["selection_strategy"]} strategy)'
     # )
+    # # load hand labels csv file as a pandas dataframe
+    # # TODO: load hand labels, ie. CollectedData.csv; call this new_labels
+    # # loop through videos and select labels from each
+    # frames_per_video = cfg["n_pseudo_labels"] / num_videos  # TODO: define num_videos above
+    # for video_dir in cfg["video_directories"]:
+    #     video_files = os.listdir(os.path.join(data_dir, video_dir))
+    #     for video_file in video_files:
+    #         # select labels from this video
+    #         frame_idxs = select_frame_idxs_eks(
+    #             video_file=None,
+    #             n_frames_to_select=frames_per_video,
+    #         )
+    #         # export frames to labeled data directory
+    #         export_frames(
+    #             video_file: str,
+    #             save_dir: str,
+    #             frame_idxs=frame_idxs,
+    #             format="png",
+    #             n_digits=8,
+    #             context_frames=0,
+    #         )
+    #         # append pseudo labels to hand labels
+    #         # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
+    #         # load video predictions for this particular video (for now from rng0, later from eks)
+    #         # subselect the predictions corresponding to frame_idxs
+    #         # concatenate subselected predictions from this video to new_labels; call this new_labels also
+
+    # # FOR LATER: check that we have the right number of labels; new_labels.shape[0] should equal cfg["n_pseudo_labels"] + 
+    # # save out new_labels in a new csv file
+    # # TODO
+
     # # - we need to add frames to the existing dataset
     # # - for each strategy/run/whatever, need to make a new csv file with updated frames
 
