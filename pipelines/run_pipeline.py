@@ -44,11 +44,11 @@ def pipeline(config_file: str):
         cfg_lp.training.rng_seed_data_pt = k
         
         # add iteration-specific fields to the config
-        # cfg_lp.training.max_epochs = 10
-        # cfg_lp.training.min_epochs = 10
+        cfg_lp.training.max_epochs = 10
+        cfg_lp.training.min_epochs = 10
         # update version that works
-        cfg_lp.training.max_steps = 64
-        cfg_lp.training.min_steps = 64
+        # cfg_lp.training.max_steps = 64
+        # cfg_lp.training.min_steps = 64
         cfg_lp.training.unfreeze_step = 30
         
         # define the output directory - the name below should come from (fully generated from) config file configuration

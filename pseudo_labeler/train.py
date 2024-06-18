@@ -51,7 +51,7 @@ def get_callbacks(
         )
         callbacks.append(early_stopping)
     if lr_monitor:
-        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step") #TODO: check with Matt
+        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch") #TODO: check with Matt
         callbacks.append(lr_monitor)
     if ckpt_model:
         if early_stopping:
@@ -130,12 +130,6 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
     # logger
     logger = pl.loggers.TensorBoardLogger("tb_logs", name=cfg.model.model_name)
 
-    # early stopping, learning rate monitoring, model checkpointing, backbone unfreezing
-    # copy tget_callbacks from lightning_pose and set in train.py. there's some epochs and steps need to change
-    # don't import from lightning pose, copy paste that function to here.
-    # go through indivudal callbacks function, change anything from epocns to steps.
-    # make sure that getting similar results whether we train with all the steps or epochs
-    # there'll be some comparison to do
     callbacks = get_callbacks(cfg, early_stopping=False)
 
     # calculate number of batches for both labeled and unlabeled data per epoch
@@ -146,10 +140,8 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        # max_epochs=cfg.training.max_epochs,
-        # min_epochs=cfg.training.min_epochs,
-        max_steps=cfg.training.max_steps,
-        min_steps=cfg.training.min_steps,
+        max_epochs=cfg.training.max_epochs,
+        min_epochs=cfg.training.min_epochs,
         check_val_every_n_epoch=cfg.training.check_val_every_n_epoch,
         log_every_n_steps=cfg.training.log_every_n_steps,
         

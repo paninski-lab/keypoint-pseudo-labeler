@@ -74,7 +74,7 @@ training:
   # epochs over which to assess validation metrics for early stopping
   early_stop_patience: 3
   # epoch at which backbone network weights begin updating
-  unfreezing_epoch: 20
+  unfreezing_epoch: 0 #20
   # max training epochs; training may exit before due to early stopping
   min_epochs: 300
   max_epochs: 300
