@@ -36,6 +36,9 @@ final_ensemble_seeds: 5
 
 # datasetname: 
 
-# 
+# training parameters
+min_steps: 300
+max_steps: 300
+milestone_steps: [100, 150, 200]
 val_check_interval: 50
 train_check_interval: 10

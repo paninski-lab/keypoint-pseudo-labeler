@@ -67,14 +67,14 @@ def pipeline(config_file: str):
         mirror-mouse/100_10000-eks-strategy2/rng0
         """
 
-        # train model
-        # if we run inference on videos inside train(), then we should pass a list of video
-        # directories to loop over; these should probably be stored in pipeline config file
-        # train(cfg=cfg_lp, results_dir=results_dir)
-
-        #TODO: Tommy - make more argument to train, max step min step, milestone, etc. pass
-        #information from pipeline config which we call cfg. 
-        best_ckpt, data_module, trainer = train(cfg=cfg_lp, results_dir=results_dir)
+        best_ckpt, data_module, trainer = train(
+                                                cfg=cfg_lp, 
+                                                results_dir=results_dir,
+                                                min_steps=cfg["min_steps"],
+                                                max_steps=cfg["max_steps"],
+                                                milestone_steps=cfg["milestone_steps"],
+                                                val_check_interval=cfg["val_check_interval"]
+                                                )                                     
 
         # -------------------------------------------------------------------------------------
         # run inference on all InD/OOD videos and compute unsupervised metrics
