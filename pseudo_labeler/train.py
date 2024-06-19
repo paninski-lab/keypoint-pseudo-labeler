@@ -84,9 +84,9 @@ def get_callbacks(
 def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
     # TODO: Tommy - define these following in the pipeline_example.yml instead of harcode
-    MIN_STEPS = 500
-    MAX_STEPS = 500
-    MILESTONE_STEPS = [100,200,300]
+    MIN_STEPS = 1000
+    MAX_STEPS = 1000
+    MILESTONE_STEPS = [100,150,200] #[100,200,300]
 
     # mimic hydra, change dir into results dir
     pwd = os.getcwd()
