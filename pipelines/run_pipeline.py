@@ -172,7 +172,6 @@ def pipeline(config_file: str):
 
     # ''' Output from EKS can be csv or DataFrame, whatever is easier for the next step '''
 
-
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
     # # -------------------------------------------------------------------------------------
