@@ -89,8 +89,6 @@ def pipeline(config_file: str):
                     cfg=cfg_lp,
                     preds_file=os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv")),
                     ckpt_file=best_ckpt,
-                    # model=model,
-                    # ckpt_file=os.path.join(results_dir, "model.ckpt"),
                     data_module=data_module,
                     trainer=trainer,
                     metrics=True,
