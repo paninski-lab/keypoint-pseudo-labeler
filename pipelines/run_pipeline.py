@@ -61,36 +61,46 @@ def pipeline(config_file: str):
         ...
         mirror-mouse/100_10000-eks-strategy2/rng0
         """
-        # best_ckpt, data_module, trainer = train(
-        #                                         cfg=cfg_lp, 
-        #                                         results_dir=results_dir,
-        #                                         min_steps=cfg["min_steps"],
-        #                                         max_steps=cfg["max_steps"],
-        #                                         milestone_steps=cfg["milestone_steps"],
-        #                                         val_check_interval=cfg["val_check_interval"]
-        #                                         )                                     
+
+        tb_logs_dir = os.path.join(results_dir, "tb_logs/test")
+
+        if os.path.exists(tb_logs_dir):
+            print(f"tb_logs/test directory found for rng{k}. Skipping training.") 
+            num_videos = 0
+            for video_dir in cfg["video_directories"]:
+                video_files = os.listdir(os.path.join(data_dir, video_dir))
+                num_videos += len(video_files)   
+            continue
+        
+        else:
+            print(f"No tb_logs/test directory found for rng{k}. Training the model.")
+            best_ckpt, data_module, trainer = train(
+                                                    cfg=cfg_lp, 
+                                                    results_dir=results_dir,
+                                                    min_steps=cfg["min_steps"],
+                                                    max_steps=cfg["max_steps"],
+                                                    milestone_steps=cfg["milestone_steps"],
+                                                    val_check_interval=cfg["val_check_interval"]
+                                                    )                                     
 
         # # -------------------------------------------------------------------------------------
         # # run inference on all InD/OOD videos and compute unsupervised metrics
-        # # -------------------------------------------------------------------------------------
-        
-        num_videos = 0
-        for video_dir in cfg["video_directories"]:
-            video_files = os.listdir(os.path.join(data_dir, video_dir))
-            num_videos += len(video_files)
-            # for video_file in video_files:
-            #     results_df = inference_with_metrics(
-            #         video_file=os.path.join(data_dir, video_dir, video_file),
-            #         cfg=cfg_lp,
-            #         preds_file=os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv")),
-            #         ckpt_file=best_ckpt,
-            #         data_module=data_module,
-            #         trainer=trainer,
-            #         metrics=True,
-            #     )
-            pass        
-    
-
+        # # -------------------------------------------------------------------------------------    
+            num_videos = 0
+            for video_dir in cfg["video_directories"]:
+                video_files = os.listdir(os.path.join(data_dir, video_dir))
+                num_videos += len(video_files)
+                for video_file in video_files:
+                    results_df = inference_with_metrics(
+                        video_file=os.path.join(data_dir, video_dir, video_file),
+                        cfg=cfg_lp,
+                        preds_file=os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv")),
+                        ckpt_file=best_ckpt,
+                        data_module=data_module,
+                        trainer=trainer,
+                        metrics=True,
+                    )
+                   
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
     # # -------------------------------------------------------------------------------------
@@ -202,9 +212,11 @@ def pipeline(config_file: str):
                 context_frames=0,
             )
             
-            # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
-            # load video predictions for this particular video (for now from rng0, later from eks)
+    #         # load video predictions for this particular video (for now from rng0, later from eks)
             preds_df = pd.read_csv("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/predictions.csv",header = [0,1,2], index_col=0)
+            mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
+            preds_df = preds_df.loc[:, mask]
+
             print(preds_df.head())
             
             # subselect the predictions corresponding to frame_idxs
