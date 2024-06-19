@@ -184,16 +184,14 @@ def pipeline(config_file: str):
     for video_dir in cfg["video_directories"]:
         video_files = os.listdir(os.path.join(data_dir, video_dir))
         for video_file in video_files:         
-            
             video_path = os.path.join(data_dir, video_dir, video_file)
-
             frame_idxs = select_frame_idxs_eks(
                 video_file=video_file,
                 n_frames_to_select=frames_per_video,
             )
             selected_frame_idxs.extend(frame_idxs)
             # debugging: print(f"Selected frame indices for {video_file}: {frame_idxs}")
-    
+
             # # export frames to labeled data directory
             export_frames(
                 video_file = video_path,
@@ -203,6 +201,28 @@ def pipeline(config_file: str):
                 n_digits=8,
                 context_frames=0,
             )
+
+            preds_df = pd.read_csv("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/predictions.csv",header = [0,1,2], index_col=0)
+            print(preds_df.head())
+            subselected_preds = preds_df[preds_df.index.isin(frame_idxs)]
+            
+            #debugging
+            print("Subselected Predictions:")
+            print(subselected_preds)
+            
+            new_labels = pd.concat([new_labels, subselected_preds])
+
+            #debugging
+            print("New Labels:")
+            print(new_labels)
+
+    # Save the updated new_labels DataFrame 
+    new_labels_file = os.path.join(data_dir, "new_labels_100_1000_eks.csv")
+    new_labels.to_csv(new_labels_file, index=False)
+
+
+
+
     # debugging: print(f"Frames exported to {labeled_data_dir}")
 
     #         # append pseudo labels to hand labels
