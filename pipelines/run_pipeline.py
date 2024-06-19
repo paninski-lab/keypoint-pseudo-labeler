@@ -7,7 +7,7 @@ from omegaconf import DictConfig
 import sys
 import os
 import numpy as np
-from utils import format_data_walk
+from pseudo_labeler.utils import format_data_walk
 from pseudo_labeler.train import train, inference_with_metrics
 
 
