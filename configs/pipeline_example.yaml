@@ -8,7 +8,7 @@ data_type: lp
 init_ensemble_seeds:
   - 0
   - 1
-  - 2
+  # - 2
   # - 3
   # - 4
 
@@ -32,6 +32,6 @@ final_ensemble_seeds: 5
 
 # datasetname:
 
-#
+# 
 val_check_interval: 50
 train_check_interval: 10

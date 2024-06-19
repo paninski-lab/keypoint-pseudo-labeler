@@ -74,10 +74,10 @@ def pipeline(config_file: str):
         #TODO: Tommy - make more argument to train, max step min step, milestone, etc. pass
         #information from pipeline config which we call cfg. 
         best_ckpt, data_module, trainer = train(cfg=cfg_lp, results_dir=results_dir)
-    
-    # -------------------------------------------------------------------------------------
-    # run inference on all InD/OOD videos and compute unsupervised metrics
-    # -------------------------------------------------------------------------------------
+
+        # -------------------------------------------------------------------------------------
+        # run inference on all InD/OOD videos and compute unsupervised metrics
+        # -------------------------------------------------------------------------------------
         # this is actually already in the train function - do we want to split it?
         # iterate through all the videos in the video_dir in pipeline_example.yaml
         video_names = []

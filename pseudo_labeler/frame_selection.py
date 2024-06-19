@@ -11,7 +11,7 @@ def select_frame_idxs_eks(
     video_file: str,
     n_frames_to_select: int
 ) -> np.ndarray:
-    pass
+    return np.arange(n_frames_to_select)
 
 
 def export_frames(

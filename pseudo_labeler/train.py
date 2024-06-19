@@ -1,6 +1,7 @@
 """Functions for training."""
 
 import gc
+import time
 import os
 import random
 import shutil
@@ -51,12 +52,12 @@ def get_callbacks(
         )
         callbacks.append(early_stopping)
     if lr_monitor:
-        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch") #TODO: check with Matt
+        lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch")
         callbacks.append(lr_monitor)
     if ckpt_model:
         if early_stopping:
             ckpt_callback = pl.callbacks.model_checkpoint.ModelCheckpoint(
-                # TODO:check with Matt -  every_n_train_steps = cfg.training.every_n_train_steps ,
+                
                 monitor="val_supervised_loss"
                 
             )
@@ -83,9 +84,11 @@ def get_callbacks(
 
 def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
-    data_module = None
-    trainer = None
-    
+    # TODO: Tommy - define these following in the pipeline_example.yml instead of harcode
+    MIN_STEPS = 500
+    MAX_STEPS = 500
+    MILESTONE_STEPS = [100,200,300]
+
     # mimic hydra, change dir into results dir
     pwd = os.getcwd()
     os.makedirs(results_dir, exist_ok=True)
@@ -117,6 +120,17 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
     # datamodule; breaks up dataset into train/val/test
     data_module = get_data_module(cfg=cfg, dataset=dataset, video_dir=video_dir)
 
+    data_module.setup()
+
+    #TODO Tommy - total number of trained frames
+    num_train_frames = len(data_module.train_dataset)
+
+    step_per_epoch = num_train_frames / cfg.training.train_batch_size
+
+    cfg.training.max_epochs = int(MAX_STEPS / step_per_epoch)
+    cfg.training.min_epochs = int(MIN_STEPS / step_per_epoch)
+    cfg.training.lr_scheduler_params.multisteplr.milestones = [int( s / step_per_epoch) for s in MILESTONE_STEPS]
+
     # build loss factory which orchestrates different losses
     loss_factories = get_loss_factories(cfg=cfg, data_module=data_module)
 
@@ -142,16 +156,28 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
         devices=1,
         max_epochs=cfg.training.max_epochs,
         min_epochs=cfg.training.min_epochs,
-        check_val_every_n_epoch=cfg.training.check_val_every_n_epoch,
+        check_val_every_n_epoch=None,
+        val_check_interval=int(50), #TODO: make this something to pass to train.py and define in the yaml file. harcode validating every 50 steps
         log_every_n_steps=cfg.training.log_every_n_steps,
         
         callbacks=callbacks,
         logger=logger,
+        # limit_train_batches= int(1),
         limit_train_batches=limit_train_batches,
     )
 
     # train model!
+    
+    start_time = time.time()
+
     trainer.fit(model=model, datamodule=data_module)
+
+    end_time = time.time()
+
+    training_time = end_time - start_time
+
+    print(f"Training time: {training_time:.2f} seconds")
+
 
     # save config file
     cfg_file_local = os.path.join(results_dir, "config.yaml")
@@ -284,15 +310,15 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
     # clean up memory
     del imgaug_transform
     del dataset
-    # del data_module
-    del data_module_pred
+    del data_module
+    # del data_module_pred
     del loss_factories
     del model
     # del trainer
     gc.collect()
     torch.cuda.empty_cache()
     
-    return best_ckpt, data_module, trainer
+    return best_ckpt, data_module_pred, trainer
 
 def inference_with_metrics(
     video_file: str,
@@ -324,10 +350,10 @@ def inference_with_metrics(
 
     # compute and save various metrics
     if metrics:
-        try:
-            compute_metrics(cfg=cfg, preds_file=preds_file, data_module=data_module)
-        except Exception as e:
-            print(f"Error predicting on {video_file}:\n{e}")
+        #try:
+        compute_metrics(cfg=cfg, preds_file=preds_file, data_module=data_module)
+        #except Exception as e:
+        #    print(f"Error predicting on {video_file}:\n{e}")
 
     video_clip.close()
     del video_clip
