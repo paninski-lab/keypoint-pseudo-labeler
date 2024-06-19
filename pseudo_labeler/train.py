@@ -68,7 +68,6 @@ def get_callbacks(
     if backbone_unfreeze:
         transfer_unfreeze_callback = pl.callbacks.BackboneFinetuning(
             unfreeze_backbone_at_epoch=cfg.training.unfreezing_epoch,
-            lambda_func=lambda epoch: 1.5,
             backbone_initial_ratio_lr=0.1,
             should_align=True,
             train_bn=True,
