@@ -201,15 +201,21 @@ def pipeline(config_file: str):
                 n_digits=8,
                 context_frames=0,
             )
-
+            
+            # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
+            # load video predictions for this particular video (for now from rng0, later from eks)
             preds_df = pd.read_csv("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/predictions.csv",header = [0,1,2], index_col=0)
             print(preds_df.head())
+            
+            # subselect the predictions corresponding to frame_idxs
             subselected_preds = preds_df[preds_df.index.isin(frame_idxs)]
             
             #debugging
             print("Subselected Predictions:")
             print(subselected_preds)
             
+            # append pseudo labels to hand labels
+            # concatenate subselected predictions from this video to new_labels; call this new_labels also
             new_labels = pd.concat([new_labels, subselected_preds])
 
             #debugging
@@ -220,16 +226,6 @@ def pipeline(config_file: str):
     new_labels_file = os.path.join(data_dir, "new_labels_100_1000_eks.csv")
     new_labels.to_csv(new_labels_file, index=False)
 
-
-
-
-    # debugging: print(f"Frames exported to {labeled_data_dir}")
-
-    #         # append pseudo labels to hand labels
-    #         # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
-    #         # load video predictions for this particular video (for now from rng0, later from eks)
-    #         # subselect the predictions corresponding to frame_idxs
-    #         # concatenate subselected predictions from this video to new_labels; call this new_labels also
 
     # # FOR LATER: check that we have the right number of labels; new_labels.shape[0] should equal cfg["n_pseudo_labels"] + 
     # # save out new_labels in a new csv file
