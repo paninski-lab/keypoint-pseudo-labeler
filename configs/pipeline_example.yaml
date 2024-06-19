@@ -13,8 +13,6 @@ init_ensemble_seeds:
   # - 4
 
 video_directories:
-  # - /teamspace/studios/this_studio/data/mirror-mouse/videos_test
-  # - /teamspace/studios/this_studio/data/mirror-mouse/videos_test_new
   - videos_test
   - videos_test_new
 
@@ -32,6 +30,9 @@ final_ensemble_seeds: 5
 
 # datasetname:
 
-# 
+# training parameters
+min_steps: 300
+max_steps: 300
+milestone_steps: [100, 150, 200]
 val_check_interval: 50
 train_check_interval: 10

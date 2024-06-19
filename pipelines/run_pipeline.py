@@ -8,15 +8,19 @@ import sys
 import os
 import numpy as np
 from utils import format_data_walk
+import pandas as pd
 from pseudo_labeler.train import train, inference_with_metrics
-
-
+from pseudo_labeler.frame_selection import select_frame_idxs_eks, export_frames
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
+from eks.utils import format_data, populate_output_dataframe
+
+# from pseudo_labeler import VIDEO_PREDS_DIR
+# from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
+# from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
 from eks.utils import populate_output_dataframe
 from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
 
-#%%
 def pipeline(config_file: str):
 
     # load pipeline config file
@@ -46,13 +50,8 @@ def pipeline(config_file: str):
         #translate number of steps into numbers of epoch
         cfg_lp.training.max_epochs = 10
         cfg_lp.training.min_epochs = 10
-        # update version that works
-        # cfg_lp.training.max_steps = 64
-        # cfg_lp.training.min_steps = 64
         cfg_lp.training.unfreeze_step = 30
         
-        # define the output directory - the name below should come from (fully generated from) config file configuration
-        #result_dir should be an absolute path
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
         results_dir = os.path.join(parent_dir, f"../outputs/mirror-mouse/100_1000-eks-random/rng{k}")
@@ -65,6 +64,14 @@ def pipeline(config_file: str):
         ...
         mirror-mouse/100_10000-eks-strategy2/rng0
         """
+        # best_ckpt, data_module, trainer = train(
+        #                                         cfg=cfg_lp, 
+        #                                         results_dir=results_dir,
+        #                                         min_steps=cfg["min_steps"],
+        #                                         max_steps=cfg["max_steps"],
+        #                                         milestone_steps=cfg["milestone_steps"],
+        #                                         val_check_interval=cfg["val_check_interval"]
+        #                                         )                                     
 
         # train model
         # if we run inference on videos inside train(), then we should pass a list of video
@@ -97,7 +104,6 @@ def pipeline(config_file: str):
                     trainer=trainer,
                     metrics=True,
                 )
-
 
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
@@ -171,37 +177,66 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
     # # -------------------------------------------------------------------------------------
-    # # TODO: 
-    # print(
-    #     f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
-    #     f'({cfg["selection_strategy"]} strategy)'
-    # )
-    # # load hand labels csv file as a pandas dataframe
-    # # TODO: load hand labels, ie. CollectedData.csv; call this new_labels
-    # # loop through videos and select labels from each
-    # frames_per_video = cfg["n_pseudo_labels"] / num_videos  # TODO: define num_videos above
-    # for video_dir in cfg["video_directories"]:
-    #     video_files = os.listdir(os.path.join(data_dir, video_dir))
-    #     for video_file in video_files:
-    #         # select labels from this video
-    #         frame_idxs = select_frame_idxs_eks(
-    #             video_file=None,
-    #             n_frames_to_select=frames_per_video,
-    #         )
-    #         # export frames to labeled data directory
-    #         export_frames(
-    #             video_file: str,
-    #             save_dir: str,
-    #             frame_idxs=frame_idxs,
-    #             format="png",
-    #             n_digits=8,
-    #             context_frames=0,
-    #         )
-    #         # append pseudo labels to hand labels
-    #         # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
-    #         # load video predictions for this particular video (for now from rng0, later from eks)
-    #         # subselect the predictions corresponding to frame_idxs
-    #         # concatenate subselected predictions from this video to new_labels; call this new_labels also
+    
+    print(f"Total number of videos: {num_videos}")
+    
+    print(
+        f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
+        f'({cfg["selection_strategy"]} strategy)'
+    )
+    
+    new_labels = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"),header = [0,1,2], index_col=0)
+    frames_per_video = cfg["n_pseudo_labels"] / num_videos
+    print(f"Frames per video: {frames_per_video}")
+
+    selected_frame_idxs = []    
+    labeled_data_dir = os.path.join(data_dir, "labeled_data")  # Directory to save labeled frames
+
+    for video_dir in cfg["video_directories"]:
+        video_files = os.listdir(os.path.join(data_dir, video_dir))
+        for video_file in video_files:         
+            video_path = os.path.join(data_dir, video_dir, video_file)
+            frame_idxs = select_frame_idxs_eks(
+                video_file=video_file,
+                n_frames_to_select=frames_per_video,
+            )
+            selected_frame_idxs.extend(frame_idxs)
+            # debugging: print(f"Selected frame indices for {video_file}: {frame_idxs}")
+
+            # # export frames to labeled data directory
+            export_frames(
+                video_file = video_path,
+                save_dir = labeled_data_dir,
+                frame_idxs=frame_idxs,
+                format="png",
+                n_digits=8,
+                context_frames=0,
+            )
+            
+            # TODO: load predictions for the specific indices returned by select_frame_idxs_eks()
+            # load video predictions for this particular video (for now from rng0, later from eks)
+            preds_df = pd.read_csv("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/predictions.csv",header = [0,1,2], index_col=0)
+            print(preds_df.head())
+            
+            # subselect the predictions corresponding to frame_idxs
+            subselected_preds = preds_df[preds_df.index.isin(frame_idxs)]
+            
+            #debugging
+            print("Subselected Predictions:")
+            print(subselected_preds)
+            
+            # append pseudo labels to hand labels
+            # concatenate subselected predictions from this video to new_labels; call this new_labels also
+            new_labels = pd.concat([new_labels, subselected_preds])
+
+            #debugging
+            print("New Labels:")
+            print(new_labels)
+
+    # Save the updated new_labels DataFrame 
+    new_labels_file = os.path.join(data_dir, "new_labels_100_1000_eks.csv")
+    new_labels.to_csv(new_labels_file, index=False)
+
 
     # # FOR LATER: check that we have the right number of labels; new_labels.shape[0] should equal cfg["n_pseudo_labels"] + 
     # # save out new_labels in a new csv file

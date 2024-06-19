@@ -11,6 +11,7 @@ data:
   data_dir: /teamspace/studios/this_studio/data/mirror-mouse
   # ABSOLUTE path to unlabeled videos' directory. the below is just a toy example for running Getting Started scripts
   video_dir: videos_test
+  
   # location of labels; for example script, this should be relative to `data_dir`
   csv_file: CollectedData.csv
   # downsample heatmaps - 2 | 3

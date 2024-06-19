@@ -4,7 +4,7 @@ import os
 
 import cv2
 import numpy as np
-from keypoint_pseudo_labeler.video import get_frames_from_idxs
+from pseudo_labeler.video import get_frames_from_idxs
 
 
 def select_frame_idxs_eks(
