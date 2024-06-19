@@ -7,15 +7,14 @@ from omegaconf import DictConfig
 import sys
 import os
 import numpy as np
+from utils import format_data_walk
 from pseudo_labeler.train import train, inference_with_metrics
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
-from eks.utils import format_data, populate_output_dataframe
-# from pseudo_labeler import VIDEO_PREDS_DIR
-# from eks.singleview_smoother import vectorized_ensemble_kalman_smoother_single_view
-# from eks.jax_singleview_smoother import jax_ensemble_kalman_smoother_single_view
+from eks.utils import populate_output_dataframe
+from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
 
 #%%
 def pipeline(config_file: str):
@@ -81,13 +80,16 @@ def pipeline(config_file: str):
         # -------------------------------------------------------------------------------------
         # this is actually already in the train function - do we want to split it?
         # iterate through all the videos in the video_dir in pipeline_example.yaml
+        video_names = []
         for video_dir in cfg["video_directories"]:
             video_files = os.listdir(os.path.join(data_dir, video_dir))
             for video_file in video_files:
+                video_name = video_file.replace(".mp4", ".csv")
+                video_names.append(video_name)
                 results_df = inference_with_metrics(
                     video_file=os.path.join(data_dir, video_dir, video_file),
                     cfg=cfg_lp,
-                    preds_file=os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv")),
+                    preds_file=os.path.join(results_dir, "video_preds", video_name),
                     ckpt_file=best_ckpt,
                     data_module=data_module,
                     trainer=trainer,
@@ -98,73 +100,70 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------
     # optional: run eks on all InD/OOD videos
     # # -------------------------------------------------------------------------------------
-    # input_dir = vid_data  # = output from previous step
-    # os.makedirs(results_dir, exist_ok=True)  # can be removed later (if results_dir exists)
-    # data_type = cfg["data_type"]
-    # output_df = None
+    print("Starting EKS")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    results_dir = os.path.join(parent_dir, f"../outputs/mirror-mouse/100_1000-eks-random")
+    input_dir = results_dir
+    os.makedirs(results_dir, exist_ok=True)  # can be removed later (if results_dir exists)
+    eks_dir = os.path.join(results_dir, "eks")
+    os.makedirs(eks_dir, exist_ok=True)  # Ensure eks directory exists
+    data_type = cfg["data_type"]
+    output_df = None
 
-    # if cfg["pseudo_labeler"] == "eks":
-    #     save_filename = "EKS_output"
-    #     bodypart_list = cfg_lp["keypoint_names"]
-    #     s = None  # always optimize s
-    #     s_frames = cfg["eks_s_frames"]  # frames used for optimizing s, all by default
-    #     jax = "True"  # always use JAX acceleration for now
+    if cfg["pseudo_labeler"] == "eks":
+        bodypart_list = cfg_lp["data"]["keypoint_names"]
+        s = None  # optimize s
+        s_frames = [(None, None)] # use all frames for optimization
+        
+        for video_name in video_names:
+            # Load and format input files and prepare an empty DataFrame for output.
+            input_dfs, output_df, _ = format_data_walk(input_dir, data_type, video_name)
+            
+            print(f'Input data for {video_name} has been read into EKS.')
 
-    #     # Load and format input files and prepare an empty DataFrame for output.
-    #     input_dfs, output_df, _ = format_data(input_dir, data_type)  # check compatibility later
-    #     print('Input data has been read into EKS.')
+            ''' This region should be identical to EKS singlecam script '''
+            # Convert list of DataFrames to a 3D NumPy array
+            data_arrays = [df.to_numpy() for df in input_dfs]
+            markers_3d_array = np.stack(data_arrays, axis=0)
 
-    #     ''' This region should be identical to EKS singlecam script '''
-    #     # Convert list of DataFrames to a 3D NumPy array
-    #     data_arrays = [df.to_numpy() for df in input_dfs]
-    #     markers_3d_array = np.stack(data_arrays, axis=0)
+            # Map keypoint names to keys in input_dfs and crop markers_3d_array
+            keypoint_is = {}
+            keys = []
+            for i, col in enumerate(input_dfs[0].columns):
+                keypoint_is[col] = i
+            for part in bodypart_list:
+                keys.append(keypoint_is[part + '_x'])
+                keys.append(keypoint_is[part + '_y'])
+                keys.append(keypoint_is[part + '_likelihood'])
+            key_cols = np.array(keys)
+            markers_3d_array = markers_3d_array[:, :, key_cols]
 
-    #     # Map keypoint names to keys in input_dfs and crop markers_3d_array
-    #     keypoint_is = {}
-    #     keys = []
-    #     for i, col in enumerate(input_dfs[0].columns):
-    #         keypoint_is[col] = i
-    #     for part in bodypart_list:
-    #         keys.append(keypoint_is[part + '_x'])
-    #         keys.append(keypoint_is[part + '_y'])
-    #         keys.append(keypoint_is[part + '_likelihood'])
-    #     key_cols = np.array(keys)
-    #     markers_3d_array = markers_3d_array[:, :, key_cols]
+            # Call the smoother function
+            df_dicts, s_finals, nll_values_array = ensemble_kalman_smoother_singlecam(
+                markers_3d_array,
+                bodypart_list,
+                s,
+                s_frames,
+                blocks=[],
+                use_optax=True
+            )
+            ''' end of identical region '''
 
-    #     # Initialize
-    #     df_dicts, s_finals, nll_values = [], [], []
+            # Save eks results in new DataFrames and .csv output files
+            for k in range(len(bodypart_list)):
+                df = df_dicts[k][bodypart_list[k] + '_df']
+                output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
+                csv_filename = video_name
+                output_path = os.path.join(eks_dir, csv_filename)
+                output_df.to_csv(output_path)
 
-    #     # Call the smoother function
-    #     if jax == "True":
-    #         df_dicts, s_finals, nll_values_array = jax_ensemble_kalman_smoother_single_view(
-    #             markers_3d_array,
-    #             bodypart_list,
-    #             s,
-    #             s_frames
-    #         )
-    #     else:
-    #         df_dicts, s_finals, nll_values_array = vectorized_ensemble_kalman_smoother_single_view(
-    #             markers_3d_array,
-    #             bodypart_list,
-    #             s,
-    #             s_frames
-    #         )
-    #     ''' end of identical region '''
+            print(f"EKS DataFrame output for {video_name} successfully converted to CSV. See at {output_path}")
 
-    #     # Save eks results in new DataFrames and .csv output files
-    #     for k in range(len(bodypart_list)):
-    #         df = df_dicts[k][bodypart_list[k] + '_df']
-    #         output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
-    #         save_filename = save_filename or f'singlecam_{s_finals[k]}.csv'
-    #         output_df.to_csv(os.path.join(results_dir, save_filename))
+        else:
+            output_df = input_dir
+            # other baseline pseudolaber implementation
 
-    #     print("EKS DataFrame output successfully converted to CSV")
-
-    # else:
-    #     output_df = input_dir
-    #     # other baseline pseudolaber implementation
-
-    # ''' Output from EKS can be csv or DataFrame, whatever is easier for the next step '''
 
 
     # # -------------------------------------------------------------------------------------
