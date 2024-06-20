@@ -16,10 +16,6 @@ video_directories:
   - videos_test
   - videos_test_new
 
-# EKS smoothing parameter optimization frames
-
-eks_s_frames: [(,)]
-
 # number of pseudo-labels to select for next round of training
 n_pseudo_labels: 1000
 
@@ -32,7 +28,7 @@ selection_strategy: random
 # size of final ensemble (>1 means we can compare ensemble variance across both rounds)
 final_ensemble_seeds: 5
 
-# datasetname: 
+# datasetname:
 
 # training parameters
 min_steps: 300
