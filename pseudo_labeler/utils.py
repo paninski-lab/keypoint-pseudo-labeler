@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe
 
-def format_data_walk(input_dir, data_type):
+def format_data_walk(input_dir, data_type, video_name):
     input_dfs_list = []
     keypoint_names = None  # Initialize as None to ensure it's defined correctly later
 
@@ -11,7 +11,7 @@ def format_data_walk(input_dir, data_type):
         nonlocal keypoint_names  # Ensure we're using the outer keypoint_names variable
         for root, _, files in os.walk(directory):
             for input_file in files:
-                if input_file == 'predictions.csv':
+                if input_file == video_name:
                     file_path = os.path.join(root, input_file)
 
                     if data_type == 'slp':
