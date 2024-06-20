@@ -10,7 +10,7 @@ import numpy as np
 from pseudo_labeler.utils import format_data_walk
 from pseudo_labeler.train import train, inference_with_metrics
 
-# comment
+# comment comment
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import populate_output_dataframe
