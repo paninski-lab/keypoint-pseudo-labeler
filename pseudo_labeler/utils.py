@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe
 
+
 def format_data_walk(input_dir, data_type, video_name):
     input_dfs_list = []
     keypoint_names = None  # Initialize as None to ensure it's defined correctly later
@@ -16,14 +17,13 @@ def format_data_walk(input_dir, data_type, video_name):
 
                     if data_type == 'slp':
                         markers_curr = convert_slp_dlc(root, input_file)
-                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if
-                                          not c[1].startswith('Unnamed')]
+                        keypoint_names = [c[1] for c in markers_curr.columns[
+                                                        ::3] if not c[1].startswith('Unnamed')]
                         markers_curr_fmt = markers_curr
                     elif data_type in ['lp', 'dlc']:
-                        markers_curr = pd.read_csv(
-                            file_path, header=[0, 1, 2], index_col=0)
-                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if
-                                          not c[1].startswith('Unnamed')]
+                        markers_curr = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+                        keypoint_names = [c[1] for c in markers_curr.columns[
+                                                        :3] if not c[1].startswith('Unnamed')]
                         model_name = markers_curr.columns[0][0]
                         if data_type == 'lp':
                             markers_curr_fmt = convert_lp_dlc(
@@ -31,14 +31,18 @@ def format_data_walk(input_dir, data_type, video_name):
                         else:
                             markers_curr_fmt = markers_curr
 
+                    # Modify the frame labels to incremented integers starting at 0
+                    markers_curr_fmt.index = range(len(markers_curr_fmt))
+
                     markers_curr_fmt.to_csv('fmt_input.csv', index=False)
                     input_dfs_list.append(markers_curr_fmt)
+                    return  # Exit once the file is found and processed
 
     # Traverse input_dir and its subdirectories
     traverse_directories(input_dir)
 
     if len(input_dfs_list) == 0:
-        raise FileNotFoundError(f'No predictions.csv files found in {input_dir}')
+        raise FileNotFoundError(f'No file named {video_name} found in {input_dir}')
 
     output_df = make_output_dataframe(input_dfs_list[0])
     # returns both the formatted marker data and the empty dataframe for EKS output

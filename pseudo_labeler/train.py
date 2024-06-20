@@ -81,12 +81,15 @@ def get_callbacks(
     return callbacks
 
 
-def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
+def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, milestone_steps: List[int], val_check_interval: int) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
     # TODO: Tommy - define these following in the pipeline_example.yml instead of harcode
-    MIN_STEPS = 500
-    MAX_STEPS = 500
-    MILESTONE_STEPS = [100,200,300]
+    # MIN_STEPS = 1000
+    # MAX_STEPS = 1000
+    # MILESTONE_STEPS = [100,150,200] #[100,200,300]
+    MIN_STEPS = min_steps
+    MAX_STEPS = max_steps
+    MILESTONE_STEPS = milestone_steps
 
     # mimic hydra, change dir into results dir
     pwd = os.getcwd()
@@ -156,7 +159,8 @@ def train(cfg: DictConfig, results_dir: str) -> Tuple[str, pl.LightningDataModul
         max_epochs=cfg.training.max_epochs,
         min_epochs=cfg.training.min_epochs,
         check_val_every_n_epoch=None,
-        val_check_interval=int(50), #TODO: make this something to pass to train.py and define in the yaml file. harcode validating every 50 steps
+        # val_check_interval=int(50), #TODO: make this something to pass to train.py and define in the yaml file. harcode validating every 50 steps
+        val_check_interval=val_check_interval,
         log_every_n_steps=cfg.training.log_every_n_steps,
         
         callbacks=callbacks,
