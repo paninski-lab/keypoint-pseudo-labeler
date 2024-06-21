@@ -223,8 +223,9 @@ def pipeline(config_file: str):
                 n_frames_to_select=frames_per_video,
             )
             selected_frame_idxs.extend(frame_idxs)
-            # debugging: print(f"Selected frame indices for {video_file}: {frame_idxs}")
-
+            
+            frame_idxs = frame_idxs.astype(int)
+            
             # # export frames to labeled data directory
             export_frames(
                 video_file = video_path,
@@ -253,8 +254,8 @@ def pipeline(config_file: str):
             subselected_preds.index = new_index
 
             # debugging
-            print("Subselected Predictions:")
-            print(subselected_preds)
+            # print("Subselected Predictions:")
+            # print(subselected_preds)
             
             new_columns = pd.MultiIndex.from_arrays([
                 ['rick'] * len(subselected_preds.columns),
@@ -271,8 +272,8 @@ def pipeline(config_file: str):
             # print("New Labels:")
             # print(new_labels)
     
-    print(f"New Labels after processing directory {video_dir}:")
-    print(new_labels)
+    # print(f"New Labels after processing directory {video_dir}:")
+    # print(new_labels)
 
     # Output the final new_labels to a CSV file
     output_csv_path = os.path.join(data_dir, "UpdatedCollectedData_withPseudoLabels.csv")

@@ -45,6 +45,7 @@ def export_frames(
         frame_idxs = frame_idxs[frame_idxs >= 0]
         frame_idxs = frame_idxs[frame_idxs < int(cap.get(cv2.CAP_PROP_FRAME_COUNT))]
         frame_idxs = np.unique(frame_idxs)
+    
 
     # load frames from video
     frames = get_frames_from_idxs(cap, frame_idxs)
@@ -56,3 +57,4 @@ def export_frames(
             filename=os.path.join(save_dir, "img%s.%s" % (str(idx).zfill(n_digits), format)),
             img=frame[0],
         )
+    
