@@ -5,7 +5,7 @@ lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/co
 data_type: lp
 
 # initial ensemble seeds
-init_ensemble_seeds:
+ensemble_seeds:
   - 0
   - 1
   # - 2
