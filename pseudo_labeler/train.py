@@ -237,7 +237,8 @@ def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, mil
     # post-training analysis: predict on OOD labeled frames
     # ----------------------------------------------------------------------------------
     # update config file to point to OOD data
-    csv_file_ood = os.path.join(cfg.data.data_dir, cfg.data.csv_file).replace(".csv", "_new.csv")
+    # TODO: get rid of data.csv_file and the rest 
+    csv_file_ood = os.path.join(cfg.data.data_dir, "CollectedData_new.csv")
     if os.path.exists(csv_file_ood):
         cfg_ood = cfg.copy()
         cfg_ood.data.csv_file = csv_file_ood

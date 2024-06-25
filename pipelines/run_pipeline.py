@@ -59,6 +59,8 @@ def pipeline(config_file: str):
     #     script_dir = os.path.dirname(os.path.abspath(__file__))
     #     parent_dir = os.path.dirname(script_dir)
         results_dir = os.path.join(parent_dir, f"../outputs/mirror-mouse/100_1000-eks-random/rng{k}")
+        #TODO: train baseline model, and numers of hand label = 100  + numbers of pseudolabel =1000 +
+        # TODO; naming convention: /outputs/{dataset}/ 
         os.makedirs(results_dir, exist_ok=True)
         
         """
@@ -78,7 +80,8 @@ def pipeline(config_file: str):
                 video_files = os.listdir(os.path.join(data_dir, video_dir))
                 num_videos += len(video_files)   
 
-            checkpoint_pattern = os.path.join(results_dir, "tb_logs", "test", "version_*", "checkpoints", "*.ckpt")
+            #TODO; can change all the string after as an asterisk
+            checkpoint_pattern = os.path.join(results_dir, "*", "*", "*", "*", "*.ckpt")
             checkpoint_files = glob.glob(checkpoint_pattern)
             if checkpoint_files:
                 best_ckpt = checkpoint_files[0]  # Assuming you want the first .ckpt file found
@@ -269,6 +272,8 @@ def pipeline(config_file: str):
             # Assign new column index to subselected_preds
             subselected_preds.columns = new_columns
             # append pseudo labels to hand labels
+
+            # TODO: instead of training this 1 time. train the model 5 times based on the init_ensemble_seeds
             new_labels = pd.concat([new_labels, subselected_preds])
 
             # debugging
@@ -299,7 +304,7 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------
 
     # new_labels_csv = os.path.join(data_dir, f"UpdatedCollectedData_withPseudoLabels_{cfg['pseudo_labeler']}_{cfg['selection_strategy']}.csv")
-
+    #TODO: change the final_ensemble_seeds to init_ensemble_seeds
     # Check if final_ensemble_seeds is a list or an integer
     if isinstance(cfg["final_ensemble_seeds"], int):
         final_ensemble_seeds = [cfg["final_ensemble_seeds"]]
@@ -311,6 +316,15 @@ def pipeline(config_file: str):
     print(f'Training {cfg["final_ensemble_seeds"]} models on expanded dataset')
 
     for k in final_ensemble_seeds:
+
+        #TODO: train_and_infer() use all of the input 
+            #argument: seed k, config path or actual config file (not sure if it matters), data directory, csv, all the arguemtns from pl.Train should also be pass from this function (min step, max step, eval_check)
+            #resulst_dir is an argument for train_and_infer() as well
+            # train_and_infer() function, min_step argument is config of min_step
+            #video_directory() also need to be passed
+            # Big idea: for k in seeed, run this train_and_infer(), which sit inside train.py
+            # soon implement a baseline, huge long chunk of code baseline or eks, there sould be clear how we want to section that code off. 
+
         # Load lightning pose config file
         with open(lightning_pose_config_path, "r") as file:
             lightning_pose_cfg = yaml.safe_load(file)
@@ -327,6 +341,8 @@ def pipeline(config_file: str):
         cfg_lp.training.unfreeze_step = 30
         
         # Define the output directory
+
+        
         results_dir = os.path.join(
             parent_dir, 
             f"../outputs/mirror-mouse/100_1000-{cfg['pseudo_labeler']}-{cfg['selection_strategy']}/rng{k}"
