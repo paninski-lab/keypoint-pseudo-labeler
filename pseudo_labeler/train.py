@@ -365,6 +365,7 @@ def train_and_infer(
     max_steps: int,
     milestone_steps: int,
     val_check_interval: int,
+    video_directories: List[str],    
     new_labels_csv: Optional[str] = None
     ) -> None:
 
@@ -409,7 +410,7 @@ def train_and_infer(
     # # run inference on all InD/OOD videos and compute unsupervised metrics
     # # -------------------------------------------------------------------------------------
     
-    for video_dir in cfg["video_directories"]:
+    for video_dir in video_directories:
         video_files = [f for f in os.listdir(os.path.join(data_dir, video_dir)) if f.endswith('.mp4')]
         for video_file in video_files:
             inference_csv = os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv"))

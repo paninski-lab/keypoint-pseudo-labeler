@@ -38,7 +38,7 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------
     # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
     # -------------------------------------------------------------------------------------
-    print(f'training {len(cfg["init_ensemble_seeds"])} baseline models')
+    print(f'training {len(cfg["ensemble_seeds"])} baseline models')
     eks_input_csv_names = []  # save for EKS
 
     num_videos = 0
@@ -46,7 +46,7 @@ def pipeline(config_file: str):
         video_files = os.listdir(os.path.join(data_dir, video_dir))
         num_videos += len(video_files)   
 
-    for k in cfg["init_ensemble_seeds"]:
+    for k in cfg["ensemble_seeds"]:
     # Load lightning pose config file
         # Define the output directory
         results_dir = os.path.join(
@@ -65,6 +65,7 @@ def pipeline(config_file: str):
             max_steps=cfg["max_steps"],
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
+            video_directories=cfg["video_directories"],
             new_labels_csv= None  # Set to None to use the original csv_file
         )
 
@@ -228,7 +229,7 @@ def pipeline(config_file: str):
     # Train models on expanded dataset
     # -------------------------------------------------------------------------------------
 
-    for k in cfg["init_ensemble_seeds"]:
+    for k in cfg["ensemble_seeds"]:
         train_and_infer(
             cfg = cfg, 
             cfg_lp= cfg_lp, 
@@ -239,6 +240,7 @@ def pipeline(config_file: str):
             max_steps=cfg["max_steps"],
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
+            video_directories=cfg["video_directories"],
             new_labels_csv=new_labels_csv
         )
 
