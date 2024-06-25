@@ -17,17 +17,14 @@ def format_data_walk(input_dir, data_type, video_name):
 
                     if data_type == 'slp':
                         markers_curr = convert_slp_dlc(root, input_file)
-                        keypoint_names = [c[1] for c in markers_curr.columns[
-                                                        ::3] if not c[1].startswith('Unnamed')]
+                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if not c[1].startswith('Unnamed')]
                         markers_curr_fmt = markers_curr
                     elif data_type in ['lp', 'dlc']:
                         markers_curr = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
-                        keypoint_names = [c[1] for c in markers_curr.columns[
-                                                        :3] if not c[1].startswith('Unnamed')]
+                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if not c[1].startswith('Unnamed')]
                         model_name = markers_curr.columns[0][0]
                         if data_type == 'lp':
-                            markers_curr_fmt = convert_lp_dlc(
-                                markers_curr, keypoint_names, model_name=model_name)
+                            markers_curr_fmt = convert_lp_dlc(markers_curr, keypoint_names, model_name=model_name)
                         else:
                             markers_curr_fmt = markers_curr
 
@@ -36,7 +33,6 @@ def format_data_walk(input_dir, data_type, video_name):
 
                     markers_curr_fmt.to_csv('fmt_input.csv', index=False)
                     input_dfs_list.append(markers_curr_fmt)
-                    return  # Exit once the file is found and processed
 
     # Traverse input_dir and its subdirectories
     traverse_directories(input_dir)
