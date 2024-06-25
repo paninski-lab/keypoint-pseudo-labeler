@@ -391,32 +391,6 @@ def pipeline(config_file: str):
 
 print("Completed training and inference for all models with expanded dataset.")
     
-    # # - we need to add frames to the existing dataset
-    # # - for each strategy/run/whatever, need to make a new csv file with updated frames
-
-    # # train model(s) on expanded dataset
-    # print(f'training {len(cfg["final_ensemble_seeds"])} baseline models')
-    # for k in cfg["final_ensemble_seeds"]:
-    #     # load lightning pose config file
-    #     cfg_lp = use omega conf to load
-    #     # - update data.data_dir, maybe some other paths
-    #     # - update training.rng_seed_data_pt
-    #     # - add iteration-specific fields to the config
-    #     # - NEW: change labeled data field (data.csv_file)
-
-    #     # define the output directory
-    #     results_dir = todo
-
-    #     # train model
-    #     # if we run inference on videos inside train(), then we should pass a list of video
-    #     # directories to loop over; these should probably be stored in pipeline config file
-    #     train(cfg=cfg_lp, results_dir=results_dir)
-
-    # # -------------------------------------------------------------------------------------
-    # # run inference on all InD/OOD videos and compute unsupervised metrics
-    # # -------------------------------------------------------------------------------------
-    # # do as above
-
     # # -------------------------------------------------------------------------------------
     # # save out all predictions/metrics in dataframe(s)
     # # -------------------------------------------------------------------------------------
