@@ -161,11 +161,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-pipelines/lightning_logs/version_0/events.out.tfevents.1718991882.ip-10-192-12-17.4083.0
-pipelines/lightning_logs/version_0/hparams.yaml
-pipelines/lightning_logs/version_1/events.out.tfevents.1718991944.ip-10-192-12-17.4083.1
-pipelines/lightning_logs/version_1/hparams.yaml
-pipelines/lightning_logs/version_2/events.out.tfevents.1719179038.ip-10-192-11-177.11360.0
-pipelines/lightning_logs/version_2/hparams.yaml
-pipelines/lightning_logs/version_3/events.out.tfevents.1719179044.ip-10-192-11-177.11360.1
-pipelines/lightning_logs/version_3/hparams.yaml
+# Ignore all files in lightning_logs directory
+pipelines/lightning_logs/**
+
+# Ignore all files in tb_logs directory
+pipelines/tb_logs/**
+

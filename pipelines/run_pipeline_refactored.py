@@ -49,90 +49,136 @@ def pipeline(config_file: str):
     for k in cfg["ensemble_seeds"]:
     # Load lightning pose config file
         # Define the output directory
-        results_dir = os.path.join(
-            parent_dir, 
-            f"../outputs/mirror-mouse/100_1000-{cfg.get('pseudo_labeler', 'eks')}-{cfg.get('selection_strategy', 'random')}/rng{k}"
+
+        results_dir = os.path.join(parent_dir, (
+        f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+        f"pseudo={cfg['n_pseudo_labels']}/networks/rng{k}"
+            )
         )
+
+        # results_dir = os.path.join(
+        #     parent_dir, 
+        #     f"../outputs/mirror-mouse/100_1000-{cfg.get('pseudo_labeler', 'eks')}-{cfg.get('selection_strategy', 'random')}/rng{k}"
+        # )
         os.makedirs(results_dir, exist_ok=True)
         
+        # train_and_infer(
+        #     cfg = cfg, 
+        #     cfg_lp = cfg_lp, 
+        #     k = k, 
+        #     data_dir = data_dir, 
+        #     results_dir = results_dir, 
+        #     min_steps=cfg["min_steps"],
+        #     max_steps=cfg["max_steps"],
+        #     milestone_steps=cfg["milestone_steps"],
+        #     val_check_interval=cfg["val_check_interval"],
+        #     video_directories=cfg["video_directories"],
+        #     new_labels_csv= None  # Set to None to use the original csv_file
+        # )
+
         train_and_infer(
-            cfg = cfg, 
-            cfg_lp = cfg_lp, 
-            k = k, 
-            data_dir = data_dir, 
-            results_dir = results_dir, 
+            cfg=cfg,
+            cfg_lp=cfg_lp,
+            k=k,
+            data_dir=data_dir,
+            results_dir=results_dir,
             min_steps=cfg["min_steps"],
             max_steps=cfg["max_steps"],
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
             video_directories=cfg["video_directories"],
-            new_labels_csv= None  # Set to None to use the original csv_file
+            inference_csv_detailed_naming=False,
+            new_labels_csv = None # Set to None to use the original csv_file
         )
 
     # # -------------------------------------------------------------------------------------
-    # print("Starting EKS")
-    # script_dir = os.path.dirname(os.path.abspath(__file__))
-    # parent_dir = os.path.dirname(script_dir)
-    # results_dir = os.path.join(parent_dir, f"../outputs/mirror-mouse/100_1000-eks-random")
-    # input_dir = results_dir
-    # os.makedirs(results_dir, exist_ok=True)  # can be removed later (if results_dir exists)
-    # eks_dir = os.path.join(results_dir, "eks")
-    # os.makedirs(eks_dir, exist_ok=True)  # Ensure eks directory exists
-    # data_type = cfg["data_type"]
-    # output_df = None
+    # # post-process network outputs to generate potential pseudo labels (chosen in the next step)
+    # # -------------------------------------------------------------------------------------
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    input_dir = os.path.join(parent_dir, (
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"pseudo={cfg['n_pseudo_labels']}/networks/"
+        )
+    )
+    results_dir = os.path.join(parent_dir, (
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
+            f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
+        )
+    )
+    if os.path.exists(results_dir):
+        print(f"\n\n\n\nPost-Processing directory {os.path.basename(results_dir)} already exists. Skipping post-processing\n.\n.\n.\n")
+    else:
+        print(f"Post-Processing Network Outputs using method: {cfg['pseudo_labeler']}\n.\n.\n.\n")
+        os.makedirs(results_dir, exist_ok=True)
+        data_type = cfg["data_type"]
+        output_df = None
 
-    # if cfg["pseudo_labeler"] == "eks":
-    #     bodypart_list = cfg_lp["data"]["keypoint_names"]
-    #     s = None  # optimize s
-    #     s_frames = [(None, None)] # use all frames for optimization
-    #     for csv_name in eks_input_csv_names:
-    #         # Load and format input files and prepare an empty DataFrame for output.
-    #         input_dfs, output_df, _ = format_data_walk(input_dir, data_type, csv_name)
-    #         print(f'Found {len(input_dfs)} input dfs')
-    #         print(f'Input data for {csv_name} has been read into EKS.')
+        # Collect input csv names from video directory
+        input_csv_names = []
+        for video_dir in cfg["video_directories"]:
+            video_files = os.listdir(os.path.join(data_dir, video_dir))
+            for video_file in video_files:
+                csv_name = video_file.replace(".mp4", ".csv")
+                if csv_name not in input_csv_names:
+                    print(f'Appending: {csv_name} to post-processing input csv list')
+                    input_csv_names.append(csv_name)
 
-    #         ''' This region should be identical to EKS singlecam script '''
-    #         # Convert list of DataFrames to a 3D NumPy array
-    #         data_arrays = [df.to_numpy() for df in input_dfs]
-    #         markers_3d_array = np.stack(data_arrays, axis=0)
+        if cfg["pseudo_labeler"] == "eks":
+            bodypart_list = cfg_lp["data"]["keypoint_names"]
+            s = None  # optimize s
+            s_frames = [(None, None)] # use all frames for optimization
+            for csv_name in input_csv_names:
+                # Load and format input files and prepare an empty DataFrame for output.
+                input_dfs, output_df, _ = format_data_walk(input_dir, data_type, csv_name)
+                print(f'Found {len(input_dfs)} input dfs')
+                print(f'Input data for {csv_name} has been read into EKS.')
 
-    #         # Map keypoint names to keys in input_dfs and crop markers_3d_array
-    #         keypoint_is = {}
-    #         keys = []
-    #         for i, col in enumerate(input_dfs[0].columns):
-    #             keypoint_is[col] = i
-    #         for part in bodypart_list:
-    #             keys.append(keypoint_is[part + '_x'])
-    #             keys.append(keypoint_is[part + '_y'])
-    #             keys.append(keypoint_is[part + '_likelihood'])
-    #         key_cols = np.array(keys)
-    #         markers_3d_array = markers_3d_array[:, :, key_cols]
+                '''
+                This region should be identical to EKS singlecam script
+                / will eventually refactor as an EKS func
+                '''
+                # Convert list of DataFrames to a 3D NumPy array
+                data_arrays = [df.to_numpy() for df in input_dfs]
+                markers_3d_array = np.stack(data_arrays, axis=0)
 
-    #         # Call the smoother function
-    #         df_dicts, s_finals, nll_values_array = ensemble_kalman_smoother_singlecam(
-    #             markers_3d_array,
-    #             bodypart_list,
-    #             s,
-    #             s_frames,
-    #             blocks=[],
-    #             use_optax=True
-    #         )
-    #         ''' end of identical region '''
+                # Map keypoint names to keys in input_dfs and crop markers_3d_array
+                keypoint_is = {}
+                keys = []
+                for i, col in enumerate(input_dfs[0].columns):
+                    keypoint_is[col] = i
+                for part in bodypart_list:
+                    keys.append(keypoint_is[part + '_x'])
+                    keys.append(keypoint_is[part + '_y'])
+                    keys.append(keypoint_is[part + '_likelihood'])
+                key_cols = np.array(keys)
+                markers_3d_array = markers_3d_array[:, :, key_cols]
 
-    #         # Save eks results in new DataFrames and .csv output files
-    #         for k in range(len(bodypart_list)):
-    #             df = df_dicts[k][bodypart_list[k] + '_df']
-    #             output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
-    #             output_path = os.path.join(eks_dir, csv_name)
-    #             output_df.to_csv(output_path)
+                # Call the smoother function
+                df_dicts, s_finals = ensemble_kalman_smoother_singlecam(
+                    markers_3d_array,
+                    bodypart_list,
+                    s,
+                    s_frames,
+                    blocks=[],
+                    use_optax=True
+                )
+                ''' end of identical region '''
 
-    #         print(f"EKS DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
+                # Save eks results in new DataFrames and .csv output files
+                for k in range(len(bodypart_list)):
+                    df = df_dicts[k][bodypart_list[k] + '_df']
+                    output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
+                    output_path = os.path.join(results_dir, csv_name)
+                    output_df.to_csv(output_path)
 
-    #     else:
-    #         output_df = input_dir
-    # #         # other baseline pseudolaber implementation
+                print(f"EKS DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
 
-    # ''' Output from EKS can be csv or DataFrame, whatever is easier for the next step '''
+            else:
+                output_df = input_dir
+            # other baseline pseudolaber implementation
+
 
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
@@ -182,7 +228,14 @@ def pipeline(config_file: str):
             # load video predictions for this particular video (for now from rng0, later from eks)
             base_name = os.path.splitext(os.path.basename(video_file))[0]
             csv_filename = base_name + ".csv"
-            preds_csv_path = os.path.join("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/", "video_preds", csv_filename)
+            preds_csv_path = os.path.join(parent_dir, (
+                    f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+                    f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
+                    f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
+                ),
+                csv_filename
+            )
+            # preds_csv_path = os.path.join("/teamspace/studios/this_studio/outputs/mirror-mouse/100_1000-eks-random/rng0/", "video_preds", csv_filename)
             preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
             mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
             preds_df = preds_df.loc[:, mask]
@@ -229,28 +282,50 @@ def pipeline(config_file: str):
     # Train models on expanded dataset
     # -------------------------------------------------------------------------------------
 
+
+
     for k in cfg["ensemble_seeds"]:
+        # train_and_infer(
+        #     cfg = cfg, 
+        #     cfg_lp= cfg_lp, 
+        #     k = k, 
+        #     data_dir = data_dir, 
+        #     results_dir = results_dir, 
+        #     min_steps=cfg["min_steps"],
+        #     max_steps=cfg["max_steps"],
+        #     milestone_steps=cfg["milestone_steps"],
+        #     val_check_interval=cfg["val_check_interval"],
+        #     video_directories=cfg["video_directories"],
+        #     new_labels_csv=new_labels_csv
+        # )
+        results_dir = os.path.join(
+            parent_dir, (
+                f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+                f"pseudo={cfg['n_pseudo_labels']}/selected-frames/rng{k}"
+            )
+        )
         train_and_infer(
-            cfg = cfg, 
-            cfg_lp= cfg_lp, 
-            k = k, 
-            data_dir = data_dir, 
-            results_dir = results_dir, 
+            cfg=cfg,
+            cfg_lp=cfg_lp,
+            k=k,
+            data_dir=data_dir,
+            results_dir=results_dir,
             min_steps=cfg["min_steps"],
             max_steps=cfg["max_steps"],
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
             video_directories=cfg["video_directories"],
-            new_labels_csv=new_labels_csv
+            inference_csv_detailed_naming=True,
+            train_frames=cfg_lp.training.train_frames,
+            n_pseudo_labels=cfg['n_pseudo_labels'],
+            pseudo_labeler=cfg['pseudo_labeler'],
+            selection_strategy=cfg['selection_strategy'],
+            ensemble_seed_start=cfg['ensemble_seeds'][0],
+            ensemble_seed_end=cfg['ensemble_seeds'][-1],
+            new_labels_csv= new_labels_csv
         )
-
-        #TODO: train_and_infer() use all of the input 
-            #argument: seed k, config path or actual config file (not sure if it matters), data directory, csv, all the arguemtns from pl.Train should also be pass from this function (min step, max step, eval_check)
-            #resulst_dir is an argument for train_and_infer() as well
-            # train_and_infer() function, min_step argument is config of min_step
-            #video_directory() also need to be passed
-            # Big idea: for k in seeed, run this train_and_infer(), which sit inside train.py
-            # soon implement a baseline, huge long chunk of code baseline or eks, there sould be clear how we want to section that code off. 
+        
+            # TODO: soon implement a baseline, huge long chunk of code baseline or eks, there sould be clear how we want to section that code off. 
 
     
     # # -------------------------------------------------------------------------------------

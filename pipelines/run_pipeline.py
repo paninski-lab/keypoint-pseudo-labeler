@@ -385,7 +385,6 @@ def pipeline(config_file: str):
                 best_ckpt = checkpoint_files[0]
             else:
                 best_ckpt = None
-            
             data_module = None
             trainer = None
         
@@ -428,7 +427,6 @@ def pipeline(config_file: str):
                         trainer=trainer,
                         metrics=True,
                     )
-
 print("Completed training and inference for all models with expanded dataset.")
     
     # # -------------------------------------------------------------------------------------
