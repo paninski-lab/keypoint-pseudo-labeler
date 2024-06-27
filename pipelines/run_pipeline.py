@@ -9,13 +9,12 @@ import os
 import glob
 import numpy as np
 import pandas as pd
-from pseudo_labeler.utils import format_data_walk
+from pseudo_labeler.utils import format_data_walk, ensemble_only_singlecam
 from pseudo_labeler.train import train, inference_with_metrics
 from pseudo_labeler.frame_selection import select_frame_idxs_eks, export_frames
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import format_data, populate_output_dataframe
-from eks.utils import populate_output_dataframe
 from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
 
 
@@ -52,6 +51,7 @@ def pipeline(config_file: str):
     # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
     # -------------------------------------------------------------------------------------
     print(f'training {len(cfg["ensemble_seeds"])} baseline models')
+    num_videos = 0
     for k in cfg["ensemble_seeds"]:
         
         cfg_lp.data.data_dir = data_dir
@@ -81,7 +81,6 @@ def pipeline(config_file: str):
 
         if os.path.exists(model_config_checked):
             print(f"config.yaml directory found for rng{k}. Skipping training.") 
-            num_videos = 0
             for video_dir in cfg["video_directories"]:
                 video_files = os.listdir(os.path.join(data_dir, video_dir))
                 num_videos += len(video_files)   
@@ -149,10 +148,12 @@ def pipeline(config_file: str):
             f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
         )
     )
+    pseudo_labeler = cfg["pseudo_labeler"]
+
     if os.path.exists(results_dir):
-        print(f"\n\n\n\nPost-Processing directory {os.path.basename(results_dir)} already exists. Skipping post-processing\n.\n.\n.\n")
+        print(f"\n\n\n\n{pseudo_labeler} directory {os.path.basename(results_dir)} already exists. Skipping post-processing\n.\n.\n.\n")
     else:
-        print(f"Post-Processing Network Outputs using method: {cfg['pseudo_labeler']}\n.\n.\n.\n")
+        print(f"Post-Processing Network Outputs using method: {pseudo_labeler}\n.\n.\n.\n")
         os.makedirs(results_dir, exist_ok=True)
         data_type = cfg["data_type"]
         output_df = None
@@ -167,7 +168,7 @@ def pipeline(config_file: str):
                     print(f'Appending: {csv_name} to post-processing input csv list')
                     input_csv_names.append(csv_name)
 
-        if cfg["pseudo_labeler"] == "eks":
+        if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
             bodypart_list = cfg_lp["data"]["keypoint_names"]
             s = None  # optimize s
             s_frames = [(None, None)] # use all frames for optimization
@@ -179,7 +180,7 @@ def pipeline(config_file: str):
 
                 '''
                 This region should be identical to EKS singlecam script
-                / will eventually refactor as an EKS func
+                (minus ensemble_means if statement)
                 '''
                 # Convert list of DataFrames to a 3D NumPy array
                 data_arrays = [df.to_numpy() for df in input_dfs]
@@ -197,15 +198,24 @@ def pipeline(config_file: str):
                 key_cols = np.array(keys)
                 markers_3d_array = markers_3d_array[:, :, key_cols]
 
-                # Call the smoother function
-                df_dicts, s_finals = ensemble_kalman_smoother_singlecam(
-                    markers_3d_array,
-                    bodypart_list,
-                    s,
-                    s_frames,
-                    blocks=[],
-                    use_optax=True
-                )
+                df_dicts = None
+                if pseudo_labeler == "eks":
+                    # Call the smoother function
+                    df_dicts, _ = ensemble_kalman_smoother_singlecam(
+                        markers_3d_array,
+                        bodypart_list,
+                        s,
+                        s_frames,
+                        blocks=[],
+                        use_optax=True
+                    )
+
+                elif pseudo_labeler == "ensemble_mean":
+                    # Call only ensembling function
+                    df_dicts = ensemble_only_singlecam(
+                        markers_3d_array,
+                        bodypart_list
+                    )
                 ''' end of identical region '''
 
                 # Save eks results in new DataFrames and .csv output files
@@ -215,11 +225,9 @@ def pipeline(config_file: str):
                     output_path = os.path.join(results_dir, csv_name)
                     output_df.to_csv(output_path)
 
-                print(f"EKS DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
-
-            else:
-                output_df = input_dir
-            # other baseline pseudolaber implementation
+                print(f"{pseudo_labeler} DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
+            
+            
 
 
     # # -------------------------------------------------------------------------------------
@@ -369,7 +377,7 @@ def pipeline(config_file: str):
         results_dir = os.path.join(
             parent_dir, (
                 f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
-                f"pseudo={cfg['n_pseudo_labels']}/selected-frames/rng{k}"
+                f"pseudo={cfg['n_pseudo_labels']}/expanded-training/rng{k}"
             )
         )
         os.makedirs(results_dir, exist_ok=True)
