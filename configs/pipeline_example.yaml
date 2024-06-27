@@ -21,6 +21,7 @@ n_pseudo_labels: 1000
 
 # pseudo-labeler algorithm (eks, hand, eventually other baselines)
 pseudo_labeler: eks
+# options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
 selection_strategy: random

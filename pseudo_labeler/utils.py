@@ -1,6 +1,10 @@
 import os
 import pandas as pd
-from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe
+import numpy as np
+
+from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe, make_dlc_pandas_index
+from eks.core import jax_ensemble, eks_zscore
+from eks.singlecam_smoother import adjust_observations
 
 
 def format_data_walk(input_dir, data_type, video_name):
@@ -43,3 +47,63 @@ def format_data_walk(input_dir, data_type, video_name):
     output_df = make_output_dataframe(input_dfs_list[0])
     # returns both the formatted marker data and the empty dataframe for EKS output
     return input_dfs_list, output_df, keypoint_names
+
+
+def ensemble_only_singlecam(
+        markers_3d_array, bodypart_list, ensembling_mode='median', zscore_threshold=2):
+    """
+    Perform ensembling on 3D marker data from a single camera.
+
+    Parameters:
+    markers_3d_array (np.ndarray): 3D array of marker data.
+    bodypart_list (list): List of body parts.
+    ensembling_mode (str): Mode for ensembling ('median' by default).
+    zscore_threshold (float): Z-score threshold.
+
+    Returns:
+    list: Dataframes with ensembled predictions.
+    """
+
+    T = markers_3d_array.shape[1]
+    n_keypoints = markers_3d_array.shape[2] // 3
+
+    # Compute ensemble statistics
+    print("Ensembling models")
+    ensemble_preds, ensemble_vars, keypoints_avg_dict = jax_ensemble(
+        markers_3d_array, mode=ensembling_mode)
+
+    dfs = []
+    df_dicts = []
+
+    # Process each keypoint
+    for k in range(n_keypoints):
+        # Computing z-score
+        zscore = eks_zscore(ensemble_preds[:, k, :],
+                            ensemble_preds[:, k, :],
+                            ensemble_vars[:, k, :],
+                            min_ensemble_std=zscore_threshold)
+
+        # Final Cleanup
+        pdindex = make_dlc_pandas_index([bodypart_list[k]],
+                                        labels=["x", "y", "likelihood", "x_var", "y_var", "zscore"])
+        
+        # Extract predictions and variances
+        x_vals = ensemble_preds[:, k, 0]
+        y_vals = ensemble_preds[:, k, 1]
+        x_vars = ensemble_vars[:, k, 0]
+        y_vars = ensemble_vars[:, k, 1]
+
+        pred_arr = np.vstack([
+            x_vals.T,
+            y_vals.T,
+            np.full(T, np.nan),  # likelihood is not computed
+            x_vars.T,
+            y_vars.T,
+            np.full(T, zscore)
+        ]).T
+
+        df = pd.DataFrame(pred_arr, columns=pdindex)
+        dfs.append(df)
+        df_dicts.append({bodypart_list[k] + '_df': df})
+
+    return df_dicts
