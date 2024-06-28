@@ -8,14 +8,15 @@ data_type: lp
 ensemble_seeds:
   - 0
   - 1
-  # - 2
-  # - 3
-  # - 4
+  - 2
+  - 3
+  - 4
 
 video_directories:
   - videos_test
   - videos_test_new
-
+  # - videos
+  # - videos_new
 # number of pseudo-labels to select for next round of training
 n_pseudo_labels: 1000
 
@@ -25,9 +26,6 @@ pseudo_labeler: eks
 
 # we pseudo-label all frames in all videos - how to select the final frames?
 selection_strategy: random
-
-# size of final ensemble (>1 means we can compare ensemble variance across both rounds)
-final_ensemble_seeds: 5
 
 # datasetname:
 
@@ -43,3 +41,9 @@ max_steps: 600
 milestone_steps: [150, 300 , 500]
 val_check_interval: 100
 train_check_interval: 20
+
+# min_steps: 60
+# max_steps: 60
+# milestone_steps: [15, 30 , 50]
+# val_check_interval: 10
+# train_check_interval: 2

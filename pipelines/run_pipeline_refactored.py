@@ -294,16 +294,16 @@ def pipeline(config_file: str):
         else:
             print(f"Label count verified for seed {k}: {seed_labels.shape[0]} labels")
 
-    print(f"All combined hand labels and pseudo labels saved in {hand_label_and_pseudo_label_dir}")      
+        print(f"All combined hand labels and pseudo labels saved in {hand_label_and_pseudo_label_dir}")      
 
-    # -------------------------------------------------------------------------------------
-    # Train models on expanded dataset
-    # -------------------------------------------------------------------------------------
+        # # -------------------------------------------------------------------------------------
+        # # Train models on expanded dataset
+        # # -------------------------------------------------------------------------------------
 
-    for k in cfg["ensemble_seeds"]:
-        # Define the new CSV file path for this seed
-        combined_csv_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
-        combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
+    # for k in cfg["ensemble_seeds"]:
+    #     # Define the new CSV file path for this seed
+    #     combined_csv_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
+    #     combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
 
         # Define the results directory for this seed
         results_dir = os.path.join(
@@ -326,8 +326,8 @@ def pipeline(config_file: str):
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
             video_directories=cfg["video_directories"],
-            inference_csv_detailed_naming=False,
-            train_frames=cfg_lp.training.train_frames + cfg['n_pseudo_labels'],  # Update total frames
+            inference_csv_detailed_naming=True,
+            train_frames=cfg_lp.training.train_frames,# + cfg['n_pseudo_labels'],  # Update total frames
             n_pseudo_labels=cfg['n_pseudo_labels'],
             pseudo_labeler=cfg['pseudo_labeler'],
             selection_strategy=cfg['selection_strategy'],
