@@ -38,8 +38,8 @@ final_ensemble_seeds: 5
 # val_check_interval: 50
 # train_check_interval: 10
 
-min_steps: 100
-max_steps: 100
-milestone_steps: [30, 50, 70]
-val_check_interval: 15
-train_check_interval: 4
+min_steps: 600
+max_steps: 600
+milestone_steps: [150, 300 , 500]
+val_check_interval: 100
+train_check_interval: 20

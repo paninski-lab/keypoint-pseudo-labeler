@@ -326,7 +326,7 @@ def pipeline(config_file: str):
             milestone_steps=cfg["milestone_steps"],
             val_check_interval=cfg["val_check_interval"],
             video_directories=cfg["video_directories"],
-            inference_csv_detailed_naming=True,
+            inference_csv_detailed_naming=False,
             train_frames=cfg_lp.training.train_frames + cfg['n_pseudo_labels'],  # Update total frames
             n_pseudo_labels=cfg['n_pseudo_labels'],
             pseudo_labeler=cfg['pseudo_labeler'],
