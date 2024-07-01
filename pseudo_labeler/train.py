@@ -84,10 +84,6 @@ def get_callbacks(
 
 def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, milestone_steps: List[int], val_check_interval: int) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
-    # TODO: Tommy - define these following in the pipeline_example.yml instead of harcode
-    # MIN_STEPS = 1000
-    # MAX_STEPS = 1000
-    # MILESTONE_STEPS = [100,150,200] #[100,200,300]
     MIN_STEPS = min_steps
     MAX_STEPS = max_steps
     MILESTONE_STEPS = milestone_steps
@@ -153,7 +149,7 @@ def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, mil
     limit_train_batches = calculate_train_batches(cfg, dataset)
 
     # set up trainer
-    # TODO: !! we will likely need to update this to be based on steps rather than epochs
+    # TODO: !! we will likely need to update this to be based on steps rather than epochs -  already did!
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
@@ -355,79 +351,6 @@ def inference_with_metrics(
 
     return preds_df
 
-# def train_and_infer(
-#     cfg: dict,
-#     cfg_lp: DictConfig,
-#     k: int,
-#     data_dir: str,
-#     results_dir: str,
-#     min_steps: int,
-#     max_steps: int,
-#     milestone_steps: int,
-#     val_check_interval: int,
-#     video_directories: List[str],    
-#     new_labels_csv: Optional[str] = None
-#     ) -> None:
-
-#     # -------------------------------------------------------------------------------------
-#     # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
-#     # -------------------------------------------------------------------------------------
-
-#     # Update config
-#     cfg_lp.data.data_dir = data_dir
-#     cfg_lp.training.rng_seed_data_pt = k
-#     if new_labels_csv is not None:
-#         cfg_lp.data.csv_file = new_labels_csv
-#     # If new_labels_csv is None, we keep the original csv_file from cfg_lp.data.csv_file
-
-#     # Add iteration-specific fields to the config
-#     cfg_lp.training.max_epochs = 10
-#     cfg_lp.training.min_epochs = 10
-#     cfg_lp.training.unfreeze_step = 30
-
-#     # Check if model has already been trained
-#     model_config_checked = os.path.join(results_dir, "config.yaml")
-
-#     if os.path.exists(model_config_checked):
-#         print(f"config.yaml directory found for rng{k}. Skipping training.") 
-#         checkpoint_pattern = os.path.join(results_dir, "tb_logs", "test", "version_*", "checkpoints", "*.ckpt")
-#         checkpoint_files = glob.glob(checkpoint_pattern)
-#         best_ckpt = checkpoint_files[0] if checkpoint_files else None
-#         data_module = None
-#         trainer = None
-#     else:
-#         print(f"No config.yaml found for rng{k}. Training the model.")
-#         best_ckpt, data_module, trainer = train(
-#             cfg=cfg_lp, 
-#             results_dir=results_dir,
-#             min_steps=min_steps,
-#             max_steps=max_steps,
-#             milestone_steps=milestone_steps,
-#             val_check_interval=val_check_interval
-#         )
-    
-#     # # -------------------------------------------------------------------------------------
-#     # # run inference on all InD/OOD videos and compute unsupervised metrics
-#     # # -------------------------------------------------------------------------------------
-    
-#     for video_dir in video_directories:
-#         video_files = [f for f in os.listdir(os.path.join(data_dir, video_dir)) if f.endswith('.mp4')]
-#         for video_file in video_files:
-#             inference_csv = os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv"))
-#             if os.path.exists(inference_csv):
-#                 print(f"Inference file {inference_csv} already exists. Skipping inference for {video_file}")
-#             else:
-#                 print(f"Running inference for {video_file}")
-#                 results_df = inference_with_metrics(
-#                     video_file=os.path.join(data_dir, video_dir, video_file),
-#                     cfg=cfg_lp,
-#                     preds_file=inference_csv,
-#                     ckpt_file=best_ckpt,
-#                     data_module=data_module,
-#                     trainer=trainer,
-#                     metrics=True,
-#                 )
-
 
 def train_and_infer(
     cfg: dict,
@@ -512,3 +435,77 @@ def train_and_infer(
                     trainer=trainer,
                     metrics=True,
                 )
+
+
+# def train_and_infer(
+#     cfg: dict,
+#     cfg_lp: DictConfig,
+#     k: int,
+#     data_dir: str,
+#     results_dir: str,
+#     min_steps: int,
+#     max_steps: int,
+#     milestone_steps: int,
+#     val_check_interval: int,
+#     video_directories: List[str],    
+#     new_labels_csv: Optional[str] = None
+#     ) -> None:
+
+#     # -------------------------------------------------------------------------------------
+#     # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
+#     # -------------------------------------------------------------------------------------
+
+#     # Update config
+#     cfg_lp.data.data_dir = data_dir
+#     cfg_lp.training.rng_seed_data_pt = k
+#     if new_labels_csv is not None:
+#         cfg_lp.data.csv_file = new_labels_csv
+#     # If new_labels_csv is None, we keep the original csv_file from cfg_lp.data.csv_file
+
+#     # Add iteration-specific fields to the config
+#     cfg_lp.training.max_epochs = 10
+#     cfg_lp.training.min_epochs = 10
+#     cfg_lp.training.unfreeze_step = 30
+
+#     # Check if model has already been trained
+#     model_config_checked = os.path.join(results_dir, "config.yaml")
+
+#     if os.path.exists(model_config_checked):
+#         print(f"config.yaml directory found for rng{k}. Skipping training.") 
+#         checkpoint_pattern = os.path.join(results_dir, "tb_logs", "test", "version_*", "checkpoints", "*.ckpt")
+#         checkpoint_files = glob.glob(checkpoint_pattern)
+#         best_ckpt = checkpoint_files[0] if checkpoint_files else None
+#         data_module = None
+#         trainer = None
+#     else:
+#         print(f"No config.yaml found for rng{k}. Training the model.")
+#         best_ckpt, data_module, trainer = train(
+#             cfg=cfg_lp, 
+#             results_dir=results_dir,
+#             min_steps=min_steps,
+#             max_steps=max_steps,
+#             milestone_steps=milestone_steps,
+#             val_check_interval=val_check_interval
+#         )
+    
+#     # # -------------------------------------------------------------------------------------
+#     # # run inference on all InD/OOD videos and compute unsupervised metrics
+#     # # -------------------------------------------------------------------------------------
+    
+#     for video_dir in video_directories:
+#         video_files = [f for f in os.listdir(os.path.join(data_dir, video_dir)) if f.endswith('.mp4')]
+#         for video_file in video_files:
+#             inference_csv = os.path.join(results_dir, "video_preds", video_file.replace(".mp4", ".csv"))
+#             if os.path.exists(inference_csv):
+#                 print(f"Inference file {inference_csv} already exists. Skipping inference for {video_file}")
+#             else:
+#                 print(f"Running inference for {video_file}")
+#                 results_df = inference_with_metrics(
+#                     video_file=os.path.join(data_dir, video_dir, video_file),
+#                     cfg=cfg_lp,
+#                     preds_file=inference_csv,
+#                     ckpt_file=best_ckpt,
+#                     data_module=data_module,
+#                     trainer=trainer,
+#                     metrics=True,
+#                 )
