@@ -8,9 +8,9 @@ data_type: lp
 ensemble_seeds:
   - 0
   - 1
-  # - 2
-  # - 3
-  # - 4
+  - 2
+  - 3
+  - 4
 
 video_directories:
   - videos_test
