@@ -32,7 +32,7 @@ def compute_likelihoods_and_variance(cfg_lp, input_dfs, bodypart_list, likelihoo
 
     ensemble_preds, ensemble_vars, keypoints_avg_dict = jax_ensemble(markers_3d_array)
     
-    likelihoods_above_thresh = ((1 - likelihoods) > likelihood_thresh).sum(axis=0)
+    likelihoods_above_thresh = (likelihoods > likelihood_thresh).sum(axis=0)
     summed_ensemble_vars = ensemble_vars[:, :, 0] + ensemble_vars[:, :, 1]
 
     combined_df = pd.DataFrame({'likelihoods_above_thresh': likelihoods_above_thresh.flatten(),
@@ -58,8 +58,9 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
         for i in range(len(variance_bins) - 1):
             in_bin = (summed_ensemble_vars[:, kp_idx] >= variance_bins[i]) & (summed_ensemble_vars[:, kp_idx] < variance_bins[i + 1])
             for model_count in range(6):
-                heatmap[i, model_count] = np.sum((likelihoods_above_thresh[:, kp_idx] == model_count) & in_bin)
-                total_heatmap[i, model_count] += heatmap[i, model_count]
+                count = np.sum((likelihoods_above_thresh[:, kp_idx] == model_count) & in_bin)
+                heatmap[i, model_count] = count
+                total_heatmap[i, model_count] += count
 
         row = kp_idx // num_cols
         col = kp_idx % num_cols
