@@ -13,14 +13,26 @@ from matplotlib.ticker import LogLocator
 from pseudo_labeler.utils import format_data_walk
 
 
-def compute_likelihoods_and_variance(cfg_lp, input_dfs, bodypart_list, likelihood_thresh=0.9):
+def compute_likelihoods_and_variance(input_dfs, likelihood_thresh=0.9):
     # Convert list of DataFrames to a 3D NumPy array
     data_arrays = [df.to_numpy() for df in input_dfs]
     markers_3d_array = np.stack(data_arrays, axis=0)
     
-    keypoint_is = {col: i for i, col in enumerate(input_dfs[0].columns)}
+    # Extract the body parts from the columns
+    columns = input_dfs[0].columns
+    bodypart_list = set()
+    for col in columns:
+        if col.endswith('_x'):
+            bodypart_list.add(col[:-2])
+        elif col.endswith('_y'):
+            bodypart_list.add(col[:-2])
+        elif col.endswith('_likelihood'):
+            bodypart_list.add(col[:-11])
+
+    bodypart_list = list(bodypart_list)  # Convert set to list for consistent ordering
     keys = []
     keys_likelihood = []
+    keypoint_is = {col: i for i, col in enumerate(columns)}
     for part in bodypart_list:
         keys.extend([keypoint_is[part + '_x'], keypoint_is[part + '_y'], keypoint_is[part + '_likelihood']])
         keys_likelihood.append(keypoint_is[part + '_likelihood'])
@@ -38,10 +50,10 @@ def compute_likelihoods_and_variance(cfg_lp, input_dfs, bodypart_list, likelihoo
     combined_df = pd.DataFrame({'likelihoods_above_thresh': likelihoods_above_thresh.flatten(),
                                 'summed_ensemble_vars': summed_ensemble_vars.flatten()})
     
-    return likelihoods_above_thresh, summed_ensemble_vars, combined_df
+    return likelihoods_above_thresh, summed_ensemble_vars, combined_df, bodypart_list
 
 
-def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list, data_dir, script_dir, likelihood_thresh=0.9):
+def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list, input_dir, likelihood_thresh=0.9):
     min_var = np.min(summed_ensemble_vars[summed_ensemble_vars > 0])
     max_var = np.max(summed_ensemble_vars)
     variance_bins = np.logspace(np.log10(min_var), np.log10(max_var), 10)
@@ -58,8 +70,9 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
         for i in range(len(variance_bins) - 1):
             in_bin = (summed_ensemble_vars[:, kp_idx] >= variance_bins[i]) & (summed_ensemble_vars[:, kp_idx] < variance_bins[i + 1])
             for model_count in range(6):
-                heatmap[i, model_count] = np.sum((likelihoods_above_thresh[:, kp_idx] == model_count) & in_bin)
-                total_heatmap[i, model_count] += heatmap[i, model_count]
+                count = np.sum((likelihoods_above_thresh[:, kp_idx] == model_count) & in_bin)
+                heatmap[i, model_count] = count
+                total_heatmap[i, model_count] += count
 
         row = kp_idx // num_cols
         col = kp_idx % num_cols
@@ -87,7 +100,10 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
         fig.delaxes(axs.flat[i])
 
     plt.tight_layout()
-    output_path = os.path.join(script_dir, f'{os.path.basename(data_dir)}_var_likelihood_heatmap.png')
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, f'{os.path.basename(input_dir)}_var_likelihood_heatmap.png')
+
     plt.savefig(output_path)
 
     fig_combined, ax_combined = plt.subplots(figsize=(5, 5))
@@ -96,7 +112,7 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
     im_total = ax_combined.imshow(total_heatmap.T, aspect='auto', origin='lower', extent=[0, len(variance_bins) - 1, 0, 6], cmap=cmap, norm=norm_combined)
     ax_combined.set_xlabel('Ensemble Variance (Log Scale)')
     ax_combined.set_ylabel(f'Number of Models (Likelihood > {likelihood_thresh})')
-    ax_combined.set_title(f'Combined Keypoints for {os.path.basename(data_dir)}')
+    ax_combined.set_title(f'Combined Keypoints for {os.path.basename(input_dir)}')
 
     for i in range(total_heatmap.shape[0]):
         for j in range(total_heatmap.shape[1]):
@@ -108,7 +124,7 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
     ax_combined.set_yticklabels(np.arange(6))
 
     fig_combined.colorbar(im_total, ax=ax_combined, orientation='vertical')
-    combined_output_path = os.path.join(script_dir, f'{os.path.basename(data_dir)}_var_likelihood_heatmap_combined.png')
+    combined_output_path = os.path.join(script_dir, f'{os.path.basename(input_dir)}_var_likelihood_heatmap_combined.png')
     fig_combined.tight_layout()
     fig_combined.savefig(combined_output_path)
     
