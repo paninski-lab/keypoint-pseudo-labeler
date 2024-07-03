@@ -32,7 +32,7 @@ def compute_likelihoods_and_variance(cfg_lp, input_dfs, bodypart_list, likelihoo
 
     ensemble_preds, ensemble_vars, keypoints_avg_dict = jax_ensemble(markers_3d_array)
     
-    likelihoods_above_thresh = ((1 - likelihoods) > likelihood_thresh).sum(axis=0)
+    likelihoods_above_thresh = (likelihoods > likelihood_thresh).sum(axis=0)
     summed_ensemble_vars = ensemble_vars[:, :, 0] + ensemble_vars[:, :, 1]
 
     combined_df = pd.DataFrame({'likelihoods_above_thresh': likelihoods_above_thresh.flatten(),
