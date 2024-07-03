@@ -8,9 +8,6 @@ data_type: lp
 ensemble_seeds:
   - 0
   - 1
-  - 2
-  - 3
-  - 4
 
 video_directories:
   - videos_test
@@ -36,14 +33,14 @@ selection_strategy: random
 # val_check_interval: 50
 # train_check_interval: 10
 
-min_steps: 600
-max_steps: 600
-milestone_steps: [150, 300 , 500]
-val_check_interval: 100
-train_check_interval: 20
+# min_steps: 10000
+# max_steps: 10000
+# milestone_steps: [150, 300 , 500]
+# val_check_interval: 100
+# train_check_interval: 20
 
-# min_steps: 60
-# max_steps: 60
-# milestone_steps: [15, 30 , 50]
-# val_check_interval: 10
-# train_check_interval: 2
+min_steps: 60
+max_steps: 60
+milestone_steps: [15, 30 , 50]
+val_check_interval: 10
+train_check_interval: 2
