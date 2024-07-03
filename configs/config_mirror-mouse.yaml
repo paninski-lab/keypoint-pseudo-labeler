@@ -27,7 +27,7 @@ data:
     - tailBase_top
     - tailMid_top
     - nose_top
-    - obs_top
+    # - obs_top
     - paw1LH_bot
     - paw2LF_bot
     - paw3RF_bot
@@ -35,8 +35,9 @@ data:
     - tailBase_bot
     - tailMid_bot
     - nose_bot
-    - obsHigh_bot
-    - obsLow_bot
+    # - obsHigh_bot
+    # - obsLow_bot
+
   # for mirrored setups with all keypoints defined in same csv file, define matching
   # columns for different keypoints (assumes x-y-x-y interleaving)
   # each list corresponds to a single view, so in the example below there are 2 views
@@ -44,10 +45,17 @@ data:
   # columns that correspond to keypoints only labeled in a single view are omitted
   # TODO: what if a keypoint is labeled in more than 1 but not all views?
   # this info is only used for the multiview pca loss
+  
+  # mirrored_column_matches:
+  #   - [0, 1, 2, 3, 4, 5, 6]
+  #   - [8, 9, 10, 11, 12, 13, 14]
+  # columns_for_singleview_pca: [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]
+
   mirrored_column_matches:
     - [0, 1, 2, 3, 4, 5, 6]
-    - [8, 9, 10, 11, 12, 13, 14]
-  columns_for_singleview_pca: [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]
+    - [7, 8, 9, 10, 11, 12, 13]
+  
+  columns_for_singleview_pca: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 training:
   # select from one of several predefined image/video augmentation pipelines
