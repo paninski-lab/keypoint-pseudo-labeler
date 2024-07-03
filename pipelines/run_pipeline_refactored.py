@@ -6,7 +6,7 @@ import os
 import glob
 import numpy as np
 import pandas as pd
-from pseudo_labeler.utils import format_data_walk
+from pseudo_labeler.utils import format_data_walk, pipeline_eks
 from pseudo_labeler.train import train, inference_with_metrics, train_and_infer
 from pseudo_labeler.frame_selection import select_frame_idxs_eks, export_frames
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
@@ -68,7 +68,7 @@ def pipeline(config_file: str):
 
         # Randomly select distinct rows
         n_hand_labels = cfg_lp.training.train_frames
-        selected_indices = np.random.choice(len(collected_data), n_hand_labels, replace=False)
+        selected_indices = np.random.choice(len(collected_data), n_hand_labels, replace=True)
         selected_data = collected_data.iloc[selected_indices]
         print(f"Selected {len(selected_data)} rows for k={k}")
 
@@ -98,9 +98,8 @@ def pipeline(config_file: str):
     # # # -------------------------------------------------------------------------------------
     # # # post-process network outputs to generate potential pseudo labels (chosen in the next step)
     # # # -------------------------------------------------------------------------------------
-    
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(script_dir)
+    pseudo_labeler = cfg["pseudo_labeler"]
+
     input_dir = os.path.join(parent_dir, (
             f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
             f"pseudo={cfg['n_pseudo_labels']}/networks/"
@@ -109,13 +108,13 @@ def pipeline(config_file: str):
     results_dir = os.path.join(parent_dir, (
             f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
             f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
-            f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
+            f"{pseudo_labeler}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
         )
     )
     if os.path.exists(results_dir):
-        print(f"\n\n\n\nPost-Processing directory {os.path.basename(results_dir)} already exists. Skipping post-processing\n.\n.\n.\n")
+        print(f"\n\n\n\n{pseudo_labeler} directory {results_dir} already exists. Skipping post-processing\n.\n.\n.\n")
     else:
-        print(f"Post-Processing Network Outputs using method: {cfg['pseudo_labeler']}\n.\n.\n.\n")
+        print(f"Post-Processing Network Outputs using method: {pseudo_labeler}\n.\n.\n.\n")
         os.makedirs(results_dir, exist_ok=True)
         data_type = cfg["data_type"]
         output_df = None
@@ -130,59 +129,8 @@ def pipeline(config_file: str):
                     print(f'Appending: {csv_name} to post-processing input csv list')
                     input_csv_names.append(csv_name)
 
-        if cfg["pseudo_labeler"] == "eks":
-            bodypart_list = cfg_lp["data"]["keypoint_names"]
-            s = None  # optimize s
-            s_frames = [(None, None)] # use all frames for optimization
-            for csv_name in input_csv_names:
-                # Load and format input files and prepare an empty DataFrame for output.
-                input_dfs, output_df, _ = format_data_walk(input_dir, data_type, csv_name)
-                print(f'Found {len(input_dfs)} input dfs')
-                print(f'Input data for {csv_name} has been read into EKS.')
-
-                '''
-                This region should be identical to EKS singlecam script
-                / will eventually refactor as an EKS func
-                '''
-                # Convert list of DataFrames to a 3D NumPy array
-                data_arrays = [df.to_numpy() for df in input_dfs]
-                markers_3d_array = np.stack(data_arrays, axis=0)
-
-                # Map keypoint names to keys in input_dfs and crop markers_3d_array
-                keypoint_is = {}
-                keys = []
-                for i, col in enumerate(input_dfs[0].columns):
-                    keypoint_is[col] = i
-                for part in bodypart_list:
-                    keys.append(keypoint_is[part + '_x'])
-                    keys.append(keypoint_is[part + '_y'])
-                    keys.append(keypoint_is[part + '_likelihood'])
-                key_cols = np.array(keys)
-                markers_3d_array = markers_3d_array[:, :, key_cols]
-
-                # Call the smoother function
-                df_dicts, s_finals = ensemble_kalman_smoother_singlecam(
-                    markers_3d_array,
-                    bodypart_list,
-                    s,
-                    s_frames,
-                    blocks=[],
-                    use_optax=True
-                )
-                ''' end of identical region '''
-
-                # Save eks results in new DataFrames and .csv output files
-                for k in range(len(bodypart_list)):
-                    df = df_dicts[k][bodypart_list[k] + '_df']
-                    output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
-                    output_path = os.path.join(results_dir, csv_name)
-                    output_df.to_csv(output_path)
-
-                print(f"EKS DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
-
-            else:
-                output_df = input_dir
-            # other baseline pseudolaber implementation
+        if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
+            pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir)
 
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
@@ -338,7 +286,44 @@ def pipeline(config_file: str):
 
         print(f"Completed training and inference for seed {k} using combined hand labels and pseudo labels")
 
-    print("Completed training and inference for all seeds using expanded datasets")    
+    print("Completed training and inference for all seeds using expanded datasets")
+
+    # # # -------------------------------------------------------------------------------------
+    # # # Run EKS on expanded dataset inferences
+    # # # -------------------------------------------------------------------------------------
+    pseudo_labeler = 'eks'
+    input_dir = os.path.join(parent_dir, (
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"pseudo={cfg['n_pseudo_labels']}/results_amortized_eks/"
+        )
+    )
+    results_dir = os.path.join(parent_dir, (
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"pseudo={cfg['n_pseudo_labels']}/results_amortized_eks/"
+            f"{pseudo_labeler}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
+        )
+    )
+
+    if os.path.exists(results_dir):
+        print(f"\n\n\n\n{pseudo_labeler} directory {results_dir} already exists. Skipping post-processing\n.\n.\n.\n")
+    else:
+        print(f"Post-Processing Network Outputs using method: {pseudo_labeler}\n.\n.\n.\n")
+        os.makedirs(results_dir, exist_ok=True)
+        data_type = cfg["data_type"]
+        output_df = None
+
+        # Collect input csv names from video directory
+        input_csv_names = []
+        for video_dir in cfg["video_directories"]:
+            video_files = os.listdir(os.path.join(data_dir, video_dir))
+            for video_file in video_files:
+                csv_name = video_file.replace(".mp4", ".csv")
+                if csv_name not in input_csv_names:
+                    print(f'Appending: {csv_name} to post-processing input csv list')
+                    input_csv_names.append(csv_name)
+
+        if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
+            pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir)
     
 
 if __name__ == "__main__":
