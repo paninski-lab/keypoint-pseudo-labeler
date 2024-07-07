@@ -112,7 +112,7 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
     im_total = ax_combined.imshow(total_heatmap.T, aspect='auto', origin='lower', extent=[0, len(variance_bins) - 1, 0, 6], cmap=cmap, norm=norm_combined)
     ax_combined.set_xlabel('Ensemble Variance (Log Scale)')
     ax_combined.set_ylabel(f'Number of Models (Likelihood > {likelihood_thresh})')
-    ax_combined.set_title(f'Combined Keypoints for {os.path.basename(input_dir)}')
+    ax_combined.set_title(f'Combined Keypoints for {os.path.basename(os.path.dirname(os.path.dirname(input_dir)))}')
 
     for i in range(total_heatmap.shape[0]):
         for j in range(total_heatmap.shape[1]):

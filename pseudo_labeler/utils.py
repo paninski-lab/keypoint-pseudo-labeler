@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 
-from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe, make_dlc_pandas_index
+from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe, make_dlc_pandas_index, format_data, populate_output_dataframe
 from eks.core import jax_ensemble, eks_zscore
-from eks.singlecam_smoother import adjust_observations
+from eks.singlecam_smoother import adjust_observations, ensemble_kalman_smoother_singlecam
 
 
 def format_data_walk(input_dir, data_type, video_name):
@@ -16,7 +16,7 @@ def format_data_walk(input_dir, data_type, video_name):
         nonlocal keypoint_names  # Ensure we're using the outer keypoint_names variable
         for root, _, files in os.walk(directory):
             for input_file in files:
-                if input_file == video_name:
+                if video_name in input_file:
                     file_path = os.path.join(root, input_file)
 
                     if data_type == 'slp':
@@ -49,8 +49,7 @@ def format_data_walk(input_dir, data_type, video_name):
     return input_dfs_list, output_df, keypoint_names
 
 
-def ensemble_only_singlecam(
-        markers_3d_array, bodypart_list, ensembling_mode='median', zscore_threshold=2):
+def ensemble_only_singlecam(markers_3d_array, bodypart_list, ensembling_mode='median', zscore_threshold=2):
     """
     Perform ensembling on 3D marker data from a single camera.
 
@@ -107,3 +106,61 @@ def ensemble_only_singlecam(
         df_dicts.append({bodypart_list[k] + '_df': df})
 
     return df_dicts
+
+
+def pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir):
+    bodypart_list = cfg_lp["data"]["keypoint_names"]
+    s = None  # optimize s
+    s_frames = [(None, None)] # use all frames for optimization
+    output_df = None
+    print(input_csv_names)
+
+    for csv_name in input_csv_names:
+        # Load and format input files and prepare an empty DataFrame for output.
+        input_dfs, output_df, _ = format_data_walk(input_dir, data_type, csv_name)
+        print(f'Found {len(input_dfs)} input dfs')
+        print(f'Input data for {csv_name} has been read in.')
+
+        # Convert list of DataFrames to a 3D NumPy array
+        data_arrays = [df.to_numpy() for df in input_dfs]
+        markers_3d_array = np.stack(data_arrays, axis=0)
+
+        # Map keypoint names to keys in input_dfs and crop markers_3d_array
+        keypoint_is = {}
+        keys = []
+        for i, col in enumerate(input_dfs[0].columns):
+            keypoint_is[col] = i
+        for part in bodypart_list:
+            keys.append(keypoint_is[part + '_x'])
+            keys.append(keypoint_is[part + '_y'])
+            keys.append(keypoint_is[part + '_likelihood'])
+        key_cols = np.array(keys)
+        markers_3d_array = markers_3d_array[:, :, key_cols]
+
+        df_dicts = None
+        if pseudo_labeler == "eks":
+            # Call the smoother function
+            df_dicts, _ = ensemble_kalman_smoother_singlecam(
+                markers_3d_array,
+                bodypart_list,
+                s,
+                s_frames,
+                blocks=[],
+                use_optax=True
+            )
+
+        elif pseudo_labeler == "ensemble_mean":
+            # Call only ensembling function
+            df_dicts = ensemble_only_singlecam(
+                markers_3d_array,
+                bodypart_list
+            )
+
+        # Save eks results in new DataFrames and .csv output files
+        for k in range(len(bodypart_list)):
+            df = df_dicts[k][bodypart_list[k] + '_df']
+            output_df = populate_output_dataframe(df, bodypart_list[k], output_df)
+            output_path = os.path.join(results_dir, csv_name)
+            output_df.to_csv(output_path)
+
+        print(f"{pseudo_labeler} DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
