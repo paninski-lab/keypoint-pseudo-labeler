@@ -216,26 +216,25 @@ def pipeline(config_file: str):
 
                 new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
                 subselected_preds.index = new_index
-                
-                # if 'scorer' in subselected_preds.columns.names:
-                #     scorer_names = subselected_preds.columns.get_level_values('scorer').unique()
-                # else:
-                #     scorer_names = ['scorer']  # Default name if no scorer level exists
 
-                # new_columns = pd.MultiIndex.from_arrays([
-                #     np.repeat(scorer_names, len(subselected_preds.columns) // len(scorer_names)),
-                #     subselected_preds.columns.get_level_values('bodyparts'),
-                #     subselected_preds.columns.get_level_values('coords')
-                #     ], names=['scorer', 'bodyparts', 'coords'])
+                standard_scorer_name = 'standard_scorer'
 
                 new_columns = pd.MultiIndex.from_arrays([
-                    ['rick'] * len(subselected_preds.columns),
+                    [standard_scorer_name] * len(subselected_preds.columns),
                     subselected_preds.columns.get_level_values('bodyparts'),
                     subselected_preds.columns.get_level_values('coords')
                 ], names=['scorer', 'bodyparts', 'coords'])
 
                 # Assign new column index to subselected_preds
                 subselected_preds.columns = new_columns
+
+                # seed_labelsuses the standardized scorer
+                if not seed_labels.empty:
+                    seed_labels.columns = pd.MultiIndex.from_arrays([
+                        [standard_scorer_name] * len(seed_labels.columns),
+                        seed_labels.columns.get_level_values('bodyparts'),
+                        seed_labels.columns.get_level_values('coords')
+                    ], names=['scorer', 'bodyparts', 'coords'])
                 
                 # append pseudo labels to hand labels for this seed
                 seed_labels = pd.concat([seed_labels, subselected_preds])

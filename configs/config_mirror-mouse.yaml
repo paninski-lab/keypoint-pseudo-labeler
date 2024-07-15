@@ -75,7 +75,7 @@ training:
   val_prob: 0.1
   # <=1 - fraction of total train frames (determined by `train_prob`) used for training
   # >1 - number of total train frames used for training
-  train_frames: 110 #1
+  train_frames: 50 #1
   # number of gpus to train a single model
   num_gpus: 1
   # number of cpu workers for data loaders

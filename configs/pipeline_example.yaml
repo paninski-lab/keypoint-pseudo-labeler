@@ -1,5 +1,5 @@
 # absolute path to lp yaml file
-lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
+lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_mirror-mouse.yaml
   
 # pose estimation data type
 data_type: lp
@@ -30,11 +30,11 @@ selection_strategy: random
 # datasetname:
 
 # training parameters
-min_steps: 10
-max_steps: 10
-milestone_steps: [2, 4, 6]
-val_check_interval: 5
-train_check_interval: 1
+min_steps: 100
+max_steps: 100
+milestone_steps: [20, 40, 60]
+val_check_interval: 50
+train_check_interval: 10
 
 # min_steps: 5000
 # max_steps: 5000
