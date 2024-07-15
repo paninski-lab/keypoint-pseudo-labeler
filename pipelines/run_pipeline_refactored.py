@@ -217,6 +217,17 @@ def pipeline(config_file: str):
                 new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
                 subselected_preds.index = new_index
                 
+                # if 'scorer' in subselected_preds.columns.names:
+                #     scorer_names = subselected_preds.columns.get_level_values('scorer').unique()
+                # else:
+                #     scorer_names = ['scorer']  # Default name if no scorer level exists
+
+                # new_columns = pd.MultiIndex.from_arrays([
+                #     np.repeat(scorer_names, len(subselected_preds.columns) // len(scorer_names)),
+                #     subselected_preds.columns.get_level_values('bodyparts'),
+                #     subselected_preds.columns.get_level_values('coords')
+                #     ], names=['scorer', 'bodyparts', 'coords'])
+
                 new_columns = pd.MultiIndex.from_arrays([
                     ['rick'] * len(subselected_preds.columns),
                     subselected_preds.columns.get_level_values('bodyparts'),
