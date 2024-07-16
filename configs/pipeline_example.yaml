@@ -4,6 +4,9 @@ lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/co
 # pose estimation data type
 data_type: lp
 
+# Pipeline seed for initial data split
+pipeline_seeds: 0
+
 # initial ensemble seeds
 ensemble_seeds:
   - 0
