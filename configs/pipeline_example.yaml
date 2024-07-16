@@ -18,7 +18,6 @@ ensemble_seeds:
   - 1
   - 2
   - 3
-  - 4
 
 video_directories:
   - videos_test

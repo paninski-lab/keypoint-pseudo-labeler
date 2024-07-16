@@ -399,8 +399,8 @@ def train_and_infer(
 
         if checkpoint_files:
             best_ckpt = sorted(checkpoint_files)[-1]  # Get the latest best checkpoint
-        else:
-            raise FileNotFoundError(f"No checkpoint found in {results_dir}")      
+        # else:
+            # raise FileNotFoundError(f"No checkpoint found in {results_dir}")      
         
         data_module = None
         trainer = None

@@ -176,7 +176,7 @@ def pipeline(config_file: str):
                 # Load and format input files and prepare an empty DataFrame for output.
                 input_dfs, output_df, _ = format_data_walk(input_dir, data_type, csv_name)
                 print(f'Found {len(input_dfs)} input dfs')
-                print(f'Input data for {csv_name} has been read into EKS.')
+                print(f'Input data for {csv_name} has been read in.')
 
                 '''
                 This region should be identical to EKS singlecam script

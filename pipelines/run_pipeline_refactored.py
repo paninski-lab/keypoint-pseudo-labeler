@@ -217,6 +217,9 @@ def pipeline(config_file: str):
                 new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
                 subselected_preds.index = new_index
 
+                print(f'frame_idxs: {frame_idxs}')
+                print(f'adjusted: {subselected_preds}')
+
                 standard_scorer_name = 'standard_scorer'
 
                 new_columns = pd.MultiIndex.from_arrays([
