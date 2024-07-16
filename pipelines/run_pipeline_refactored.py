@@ -43,6 +43,21 @@ def pipeline(config_file: str):
         video_files = os.listdir(os.path.join(data_dir, video_dir))
         num_videos += len(video_files)   
 
+    # Set pipeline seed
+    np.random.seed(cfg["pipeline_seeds"])
+
+    # Create subsample file
+    subsample_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}.csv"
+    subsample_dir = os.path.join(parent_dir, f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}/")
+    os.makedirs(subsample_dir, exist_ok=True)
+    subsample_path = os.path.join(subsample_dir, subsample_filename)
+
+    # Load the full dataset and create the initial subsample
+    collected_data = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"), header=[0,1,2])
+    initial_subsample = collected_data.sample(n=cfg_lp.training.train_frames)
+    initial_subsample.to_csv(subsample_path, index=False)
+    print(f"Saved initial subsample CSV file: {subsample_path}")
+    
     for k in cfg["ensemble_seeds"]:
 
         # Define the output directory
@@ -52,33 +67,8 @@ def pipeline(config_file: str):
         ))
         os.makedirs(results_dir, exist_ok=True)  
 
-        # Define a new directory for hand-labeled data CSV files
-        hand_label_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
-            f"pseudo={cfg['n_pseudo_labels']}/hand_label"
-        ))
-
-        os.makedirs(hand_label_dir, exist_ok=True)
-        # Skipping the first 3 rows
-        collected_data = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"), header=[0,1,2])
-        print(f"Loaded CollectedData.csv with {len(collected_data)} rows")
-
         # Set the seed for reproducibility
         np.random.seed(k)
-
-        # Randomly select distinct rows
-        n_hand_labels = cfg_lp.training.train_frames
-        selected_indices = np.random.choice(len(collected_data), n_hand_labels, replace=True)
-        selected_data = collected_data.iloc[selected_indices]
-        print(f"Selected {len(selected_data)} rows for k={k}")
-
-        # Create the new CSV filename
-        new_csv_filename = f"CollectedData_hand={n_hand_labels}_k={k}.csv"
-        new_csv_path = os.path.join(hand_label_dir, new_csv_filename)
-
-        # Save the selected data to the new CSV file, including the original header
-        selected_data.to_csv(new_csv_path, index=False)
-        print(f"Saved new CSV file: {new_csv_path}")
 
         train_and_infer(
             cfg=cfg,
@@ -92,7 +82,7 @@ def pipeline(config_file: str):
             val_check_interval=cfg["val_check_interval"],
             video_directories=cfg["video_directories"],
             inference_csv_detailed_naming=False,
-            new_labels_csv = new_csv_path # Set to None to use the original csv_file
+            new_labels_csv = subsample_path # Set to None to use the original csv_file
         )
 
     # # # -------------------------------------------------------------------------------------
@@ -156,19 +146,9 @@ def pipeline(config_file: str):
     ))
     os.makedirs(hand_label_and_pseudo_label_dir, exist_ok=True)
 
+    hand_labels = pd.read_csv(subsample_path, header=[0,1,2], index_col=0)
     # Process each ensemble seed
     for k in cfg["ensemble_seeds"]:
-     
-        # Load hand labels for this seed
-        hand_label_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
-            f"pseudo={cfg['n_pseudo_labels']}/hand_label"
-        ))
-        new_csv_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_k={k}.csv"
-        new_csv_path = os.path.join(hand_label_dir, new_csv_filename)
-        
-        hand_labels = pd.read_csv(new_csv_path, header=[0,1,2], index_col=0)
-        
         # Initialize seed_labels with hand labels for this seed
         seed_labels = hand_labels.copy()
 
@@ -255,16 +235,11 @@ def pipeline(config_file: str):
         else:
             print(f"Label count verified for seed {k}: {seed_labels.shape[0]} labels")
 
-        print(f"All combined hand labels and pseudo labels saved in {hand_label_and_pseudo_label_dir}")      
+        print(f"All combined hand labels and pseudo labels saved in {hand_label_and_pseudo_label_dir}")
 
         # # -------------------------------------------------------------------------------------
         # # Train models on expanded dataset
         # # -------------------------------------------------------------------------------------
-
-    # for k in cfg["ensemble_seeds"]:
-    #     # Define the new CSV file path for this seed
-    #     combined_csv_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
-    #     combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
 
         # Define the results directory for this seed
         results_dir = os.path.join(
@@ -337,7 +312,7 @@ def pipeline(config_file: str):
 
         if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
             pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir)
-    
+            
 
 if __name__ == "__main__":
     # config_file = "../configs/pipeline_example.yaml"

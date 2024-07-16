@@ -380,6 +380,8 @@ def train_and_infer(
     # Update config
     cfg_lp.data.data_dir = data_dir
     cfg_lp.training.rng_seed_data_pt = k
+    #TODO: Tommy - is this correct?
+    cfg_lp.training.rng_seed_model_pt = k
     if new_labels_csv is not None:
         cfg_lp.data.csv_file = new_labels_csv
 
