@@ -4,13 +4,21 @@ lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/co
 # pose estimation data type
 data_type: lp
 
-# initial ensemble seeds
+# pipeline seed
+# initial data split
+# shorthand p
+pipeline_seeds: 0
+
+# ensemble seeds
+# train/val/test split
+# model initialization
+# selecting pseudo-labels
 ensemble_seeds:
   - 0
   - 1
-  # - 2
-  # - 3
-  # - 4
+  - 2
+  - 3
+  - 4
 
 video_directories:
   - videos_test
@@ -36,9 +44,9 @@ milestone_steps: [2, 4, 6]
 val_check_interval: 5
 train_check_interval: 1
 
-# min_steps: 5000
-# max_steps: 5000
-# milestone_steps: [2000, 3000 , 4000]
+# min_steps: 30000
+# max_steps: 30000
+# milestone_steps: [15000, 20000 , 25000]
 # val_check_interval: 100
 # train_check_interval: 10
 
