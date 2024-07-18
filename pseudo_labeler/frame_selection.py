@@ -7,11 +7,28 @@ import numpy as np
 from pseudo_labeler.video import get_frames_from_idxs
 
 
+def get_total_frames(video_file: str) -> int:
+    # Open the video file
+    cap = cv2.VideoCapture(video_file)
+    # Get the total number of frames
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f'{total_frames} frames detected in {os.path.basename(video_file)}')
+    
+    # Release the video capture object
+    cap.release()
+    
+    return total_frames
+
+
 def select_frame_idxs_eks(
     video_file: str,
-    n_frames_to_select: int
+    n_frames_to_select: int,
+    seed: int
 ) -> np.ndarray:
-    return np.arange(n_frames_to_select)
+    total_frames = get_total_frames(video_file)
+    np.random.seed(seed)
+    return np.random.choice(total_frames, n_frames_to_select, replace=False)
+
 
 
 def export_frames(
