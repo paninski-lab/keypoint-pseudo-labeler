@@ -410,7 +410,7 @@ def train_and_infer(
     else:
         print(f"No config.yaml found for rng{k}. Training the model.")
         best_ckpt, data_module, trainer = train(
-            cfg=cfg_lp, 
+            cfg=cfg_lp.copy(), 
             results_dir=results_dir,
             min_steps=min_steps,
             max_steps=max_steps,
@@ -441,7 +441,7 @@ def train_and_infer(
                 print(f"Running inference for {video_file}")
                 results_df = inference_with_metrics(
                     video_file=os.path.join(data_dir, video_dir, video_file),
-                    cfg=cfg_lp,
+                    cfg=cfg_lp.copy(),
                     preds_file=inference_csv,
                     ckpt_file=best_ckpt,
                     data_module=data_module,

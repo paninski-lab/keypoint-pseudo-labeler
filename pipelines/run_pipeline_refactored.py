@@ -71,8 +71,8 @@ def pipeline(config_file: str):
         np.random.seed(k)
 
         train_and_infer(
-            cfg=cfg,
-            cfg_lp=cfg_lp,
+            cfg=cfg.copy(),
+            cfg_lp=cfg_lp.copy(),
             k=k,
             data_dir=data_dir,
             results_dir=results_dir,
@@ -133,7 +133,7 @@ def pipeline(config_file: str):
         f'({cfg["selection_strategy"]} strategy)'
     )
 
-    frames_per_video = cfg["n_pseudo_labels"] / num_videos
+    frames_per_video = int(cfg["n_pseudo_labels"] / num_videos)
     print(f"Frames per video: {frames_per_video}")
 
     selected_frame_idxs = []    
@@ -157,8 +157,9 @@ def pipeline(config_file: str):
             for video_file in video_files:         
                 video_path = os.path.join(data_dir, video_dir, video_file)
                 frame_idxs = select_frame_idxs_eks(
-                    video_file=video_file,
+                    video_file=video_path,
                     n_frames_to_select=frames_per_video,
+                    seed=k
                 )
                 selected_frame_idxs.extend(frame_idxs)
                 
@@ -252,8 +253,8 @@ def pipeline(config_file: str):
 
         # Run train_and_infer with the combined hand labels and pseudo labels
         train_and_infer(
-            cfg=cfg,
-            cfg_lp=cfg_lp,
+            cfg=cfg.copy(),
+            cfg_lp=cfg_lp.copy(),
             k=k,
             data_dir=data_dir,
             results_dir=results_dir,
