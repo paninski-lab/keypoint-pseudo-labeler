@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from pseudo_labeler.utils import format_data_walk, pipeline_eks
 from pseudo_labeler.train import train, inference_with_metrics, train_and_infer
-from pseudo_labeler.frame_selection import select_frame_idxs_eks, export_frames
+from pseudo_labeler.frame_selection import select_frame_idxs_random, select_frame_idxs_hand, export_frames
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 from eks.utils import format_data, populate_output_dataframe
@@ -48,16 +48,24 @@ def pipeline(config_file: str):
 
     # Create subsample file
     subsample_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}.csv"
+    unsampled_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}_unsampled.csv"
     subsample_dir = os.path.join(parent_dir, f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}/")
     os.makedirs(subsample_dir, exist_ok=True)
     subsample_path = os.path.join(subsample_dir, subsample_filename)
+    unsampled_path = os.path.join(subsample_dir, unsampled_filename)
 
-    # Load the full dataset and create the initial subsample
+    # Load the full dataset and create the initial subsample csv
     collected_data = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"), header=[0,1,2])
     initial_subsample = collected_data.sample(n=cfg_lp.training.train_frames)
     initial_subsample.to_csv(subsample_path, index=False)
-    print(f"Saved initial subsample CSV file: {subsample_path}")
-    
+    print(f"Saved initial subsample hand labels CSV file: {subsample_path}")
+
+    # and also create the unsampled csv
+    initial_indices = initial_subsample.index
+    unsampled = collected_data.drop(index=initial_indices)
+    unsampled.to_csv(unsampled_path, index=False)
+    print(f"Saved unsampled hand labels CSV file: {unsampled_path}")
+
     for k in cfg["ensemble_seeds"]:
 
         # Define the output directory
@@ -127,10 +135,10 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
 
     print(f"Total number of videos: {num_videos}")
-
+    selection_strategy = cfg["selection_strategy"]
     print(
         f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
-        f'({cfg["selection_strategy"]} strategy)'
+        f'({selection_strategy} strategy)'
     )
 
     frames_per_video = int(cfg["n_pseudo_labels"] / num_videos)
@@ -156,14 +164,25 @@ def pipeline(config_file: str):
             video_files = os.listdir(os.path.join(data_dir, video_dir))
             for video_file in video_files:         
                 video_path = os.path.join(data_dir, video_dir, video_file)
-                frame_idxs = select_frame_idxs_eks(
-                    video_file=video_path,
-                    n_frames_to_select=frames_per_video,
-                    seed=k
-                )
+
+                # If statements for different selection strategies
+                frame_idxs = []
+                if selection_strategy == 'random':
+                    frame_idxs = select_frame_idxs_random(
+                        video_file=video_path,
+                        n_frames_to_select=frames_per_video,
+                        seed=k
+                    )
+                elif selection_strategy == 'hand':
+                    frame_idxs = select_frame_idxs_hand(
+                        hand_labels_csv=unsampled_path,
+                        n_frames_to_select=frames_per_video,
+                        seed=k
+                    )
                 selected_frame_idxs.extend(frame_idxs)
                 
                 frame_idxs = frame_idxs.astype(int)
+                print(f'Selected frame indices: {frame_idxs}')
                 
                 # export frames to labeled data directory
                 export_frames(

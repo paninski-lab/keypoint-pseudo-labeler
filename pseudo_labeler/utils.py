@@ -145,8 +145,7 @@ def pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, 
                 bodypart_list,
                 s,
                 s_frames,
-                blocks=[],
-                use_optax=True
+                blocks=[]
             )
 
         elif pseudo_labeler == "ensemble_mean":

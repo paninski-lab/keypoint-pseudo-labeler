@@ -4,6 +4,7 @@ import os
 
 import cv2
 import numpy as np
+import pandas as pd
 from pseudo_labeler.video import get_frames_from_idxs
 
 
@@ -19,8 +20,10 @@ def get_total_frames(video_file: str) -> int:
     
     return total_frames
 
-
-def select_frame_idxs_eks(
+# --------------------------
+# Frame selection functions:
+# --------------------------
+def select_frame_idxs_random(
     video_file: str,
     n_frames_to_select: int,
     seed: int
@@ -28,6 +31,24 @@ def select_frame_idxs_eks(
     total_frames = get_total_frames(video_file)
     np.random.seed(seed)
     return np.random.choice(total_frames, n_frames_to_select, replace=False)
+
+def select_frame_idxs_hand(
+    hand_labels_csv: str,
+    n_frames_to_select: int,
+    seed: int
+) -> np.ndarray:
+    # Read the CSV file, skipping the first three rows
+    df = pd.read_csv(hand_labels_csv, skiprows=2)
+    # Get the total number of rows (frames)
+    total_rows = df.shape[0]
+    # If there are not enough rows, return all of the rows
+    if total_rows <= n_frames_to_select:
+        return np.arange(total_rows)
+    # Set the random seed for reproducibility
+    np.random.seed(seed)
+    # Randomly select n_frames_to_select rows
+    selected_rows = np.random.choice(total_rows, n_frames_to_select, replace=False)
+    return selected_rows
 
 
 
