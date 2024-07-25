@@ -344,13 +344,10 @@ def pipeline(config_file: str):
             mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
             preds_df = preds_df.loc[:, mask]
             
-            # subselect the predictions corresponding to frame_idxs
-            subselected_preds = preds_df[preds_df.index.isin(frame_idxs)]
-            
-            def generate_new_index(idx):
-                return f"labeled-data/img{str(idx).zfill(8)}.png"
+            # Subselect the predictions corresponding to frame_idxs
+            subselected_preds = preds_df.iloc[frame_idxs]
 
-            new_index = [generate_new_index(idx) for idx in subselected_preds.index]
+            new_index = [idx for idx in subselected_preds.index]
             subselected_preds.index = new_index
 
             print(f'adjusted: {subselected_preds}')
