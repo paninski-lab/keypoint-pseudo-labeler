@@ -63,15 +63,26 @@ def pipeline(config_file: str):
     # Create subsample file
     subsample_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}.csv"
     unsampled_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}_unsampled.csv"
+    unsampled_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_p={cfg['pipeline_seeds']}_unsampled.csv"
     subsample_dir = os.path.join(parent_dir, f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}/")
     os.makedirs(subsample_dir, exist_ok=True)
     subsample_path = os.path.join(subsample_dir, subsample_filename)
     unsampled_path = os.path.join(subsample_dir, unsampled_filename)
+    unsampled_path = os.path.join(subsample_dir, unsampled_filename)
 
+    # Load the full dataset and create the initial subsample csv
     # Load the full dataset and create the initial subsample csv
     collected_data = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"), header=[0,1,2])
     initial_subsample = collected_data.sample(n=cfg_lp.training.train_frames)
     initial_subsample.to_csv(subsample_path, index=False)
+    print(f"Saved initial subsample hand labels CSV file: {subsample_path}")
+
+    # and also create the unsampled csv
+    initial_indices = initial_subsample.index
+    unsampled = collected_data.drop(index=initial_indices)
+    unsampled.to_csv(unsampled_path, index=False)
+    print(f"Saved unsampled hand labels CSV file: {unsampled_path}")
+
     print(f"Saved initial subsample hand labels CSV file: {subsample_path}")
 
     # and also create the unsampled csv
@@ -195,8 +206,10 @@ def pipeline(config_file: str):
 
     print(f"Total number of videos: {num_videos}")
     selection_strategy = cfg["selection_strategy"]
+    selection_strategy = cfg["selection_strategy"]
     print(
         f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
+        f'({selection_strategy} strategy)'
         f'({selection_strategy} strategy)'
     )
 

@@ -40,14 +40,19 @@ selection_strategy: hand
 #val_check_interval: 10
 #train_check_interval: 10
 
-min_steps: 30000
-max_steps: 30000
-milestone_steps: [15000, 20000 , 25000]
-val_check_interval: 100 
+#min_steps: 30000
+#max_steps: 30000
+#milestone_steps: [15000, 20000 , 25000]
+#val_check_interval: 100 
+#train_check_interval: 10
+
+min_steps: 5000
+max_steps: 5000
+milestone_steps: [2000, 3000 , 4000]
+val_check_interval: 50
 train_check_interval: 10
 
-#min_steps: 5000
-#max_steps: 5000
-#milestone_steps: [2000, 3000 , 4000]
-#val_check_interval: 50
-#train_check_interval: 10
+# Flags for specifying active pipeline sections
+
+# Includes OOD video snippet analysis
+ood_snippets: True
