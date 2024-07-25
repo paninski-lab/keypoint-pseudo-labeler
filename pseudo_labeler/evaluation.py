@@ -1,15 +1,35 @@
 """Functions for plotting and making diagnostic videos."""
+import gc
 import os
-import yaml
-from omegaconf import DictConfig
 
+import lightning.pytorch as pl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from eks.core import jax_ensemble
+import torch
+import yaml
+from omegaconf import DictConfig
+from tqdm import tqdm
 from matplotlib.ticker import LogLocator
 
+from eks.core import jax_ensemble
+from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
+from eks.utils import convert_lp_dlc, make_output_dataframe, populate_output_dataframe
+from lightning_pose.data.dali import PrepareDALI
+from lightning_pose.utils.io import ckpt_path_from_base_path
+from lightning_pose.utils.predictions import (
+    PredictionHandler,
+    get_cfg_file,
+    load_model_from_checkpoint,
+    predict_single_video,
+)
+from lightning_pose.utils.scripts import (
+    compute_metrics,
+    get_data_module,
+    get_dataset,
+    get_imgaug_transform,
+)
 from pseudo_labeler.utils import format_data_walk
 
 
@@ -127,4 +147,304 @@ def plot_heatmaps(likelihoods_above_thresh, summed_ensemble_vars, bodypart_list,
     combined_output_path = os.path.join(script_dir, f'{os.path.basename(input_dir)}_var_likelihood_heatmap_combined.png')
     fig_combined.tight_layout()
     fig_combined.savefig(combined_output_path)
+
+
+# # ----------------------------
+# OOD snippet functions
+# # ----------------------------
+
+
+def find_model_dirs(base_dir, keyword):
+    model_dirs = []
+    for root, dirs, files in os.walk(base_dir):
+        for dir_name in dirs:
+            if keyword in dir_name:
+                model_dirs.append(os.path.join(root, dir_name))
+    return model_dirs
+
+
+def process_csv_for_sessions_and_frames(ground_truth_df):
+    session_frame_info = []
+    for idx, row in tqdm(ground_truth_df.iterrows(), total=len(ground_truth_df)):
+        first_col_value = row[0]
+        path_parts = first_col_value.split('/')
+        session = path_parts[1]
+        frame = path_parts[2]
+        session_frame_info.append((session, frame))
+    return session_frame_info
+
+
+def run_inference_on_snippets(model_dirs_list, data_dir, snippets_dir, ground_truth_df):
+    trainer = pl.Trainer(accelerator="gpu", devices=1)
+    session_frame_info = process_csv_for_sessions_and_frames(ground_truth_df)
     
+    for model_dir in model_dirs_list:
+        print(f'Processing model in {os.path.basename(model_dir)}')
+        cfg_file = os.path.join(model_dir, "config.yaml")
+        model_cfg = DictConfig(yaml.safe_load(open(cfg_file)))
+        
+        # Update data directories
+        model_cfg.data.data_dir = data_dir
+        model_cfg.data.video_dir = os.path.join(data_dir, "videos")
+        
+        # Get model checkpoint
+        ckpt_file = ckpt_path_from_base_path(model_dir, model_name=model_cfg.model.model_name)
+        
+        # Build datamodule
+        cfg_new = model_cfg.copy()
+        cfg_new.training.imgaug = 'default'
+        imgaug_transform = get_imgaug_transform(cfg=cfg_new)
+        dataset_new = get_dataset(cfg=cfg_new, data_dir=cfg_new.data.data_dir, imgaug_transform=imgaug_transform)
+        datamodule_new = get_data_module(cfg=cfg_new, dataset=dataset_new, video_dir=cfg_new.data.video_dir)
+        datamodule_new.setup()
+        
+        # Load model
+        model = load_model_from_checkpoint(cfg=cfg_new, ckpt_file=ckpt_file, eval=True, data_module=datamodule_new)
+        model.to("cuda")
+        
+        model_cfg.dali.base.sequence_length = 16
+
+        for session, frame in tqdm(session_frame_info):
+            video_file = os.path.join(snippets_dir, session, frame.replace('png', 'mp4'))
+            prediction_csv_file = os.path.join(model_dir, "video_preds_labeled", session, frame.replace('png', 'csv'))
+            os.makedirs(os.path.join(model_dir, "video_preds_labeled", session), exist_ok=True)
+            
+            if not os.path.exists(video_file):
+                print(f'Cannot find video snippet for {video_file}. Skipping')
+                continue
+            if os.path.exists(prediction_csv_file):
+                print(f'Prediction csv file already exists for {session}/{frame}. Skipping')
+                continue
+            
+            print(f'{video_file} saved as\n{prediction_csv_file}')
+            cfg = get_cfg_file(cfg_file=cfg_new)
+            model_type = "context" if cfg.model.model_type == "heatmap_mhcrnn" else "base"
+            cfg.training.imgaug = "default"
+            
+            vid_pred_class = PrepareDALI(
+                train_stage="predict",
+                model_type=model_type,
+                dali_config=cfg.dali,
+                filenames=[video_file],
+                resize_dims=[cfg.data.image_resize_dims.height, cfg.data.image_resize_dims.width]
+            )
+            
+            # Get loader
+            predict_loader = vid_pred_class()
+            
+            # Initialize prediction handler class
+            pred_handler = PredictionHandler(cfg=cfg, data_module=datamodule_new, video_file=video_file)
+            
+            # Compute predictions
+            preds = trainer.predict(model=model, dataloaders=predict_loader, return_predictions=True)
+            
+            # Process predictions
+            preds_df = pred_handler(preds=preds)
+            os.makedirs(os.path.dirname(prediction_csv_file), exist_ok=True)
+            preds_df.to_csv(prediction_csv_file)
+            
+            # Clear up memory
+            del predict_loader
+            del pred_handler
+            del vid_pred_class
+            gc.collect()
+            torch.cuda.empty_cache()
+        
+        del dataset_new
+        del datamodule_new
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+def run_eks_on_snippets(snippets_dir, model_dirs_list, eks_save_dir, ground_truth_df, keypoint_ensemble_list):
+    session_frame_info = process_csv_for_sessions_and_frames(ground_truth_df)
+    tracker_name = 'heatmap_tracker'
+    keypoint_names = None
+
+    # store useful info here
+    index_list = []
+    results_list = []
+
+    # Step 1: Process and save the CSVs
+    for session, frame in session_frame_info:
+        # extract all markers
+        markers_list = []
+        for model_dir in model_dirs_list:
+            csv_file = os.path.join(
+                model_dir, 'video_preds_labeled', session, frame.replace('png', 'csv'))
+            df_tmp = pd.read_csv(csv_file, header=[0, 1, 2], index_col=0)
+            keypoint_names = [l[1] for l in df_tmp.columns[::3]]
+            markers_tmp = convert_lp_dlc(df_tmp, keypoint_names, model_name=tracker_name)
+            markers_list.append(markers_tmp)
+
+        dfs_markers = markers_list
+        # make empty dataframe to write results into
+        df_eks = make_output_dataframe(df_tmp)
+
+        # Convert list of DataFrames to a 3D NumPy array
+        data_arrays = [df.to_numpy() for df in markers_list]
+        markers_3d_array = np.stack(data_arrays, axis=0)
+
+        # Map keypoint names to keys in input_dfs and crop markers_3d_array
+        keypoint_is = {}
+        keys = []
+        for i, col in enumerate(markers_list[0].columns):
+            keypoint_is[col] = i
+        for part in keypoint_ensemble_list:
+            keys.append(keypoint_is[part + '_x'])
+            keys.append(keypoint_is[part + '_y'])
+            keys.append(keypoint_is[part + '_likelihood'])
+        key_cols = np.array(keys)
+        markers_3d_array = markers_3d_array[:, :, key_cols]
+
+        save_dir = os.path.join(eks_save_dir, 'eks', session)
+        save_file = os.path.join(save_dir, frame.replace('png', 'csv'))
+        if os.path.exists(save_file):
+            print(f'Skipping ensembling for {session}/{frame} as it already exists.')
+            continue
+        else:
+            print(f'Ensembling for {session}/{frame}')
+            # Call the smoother function
+            df_dicts, s_finals = ensemble_kalman_smoother_singlecam(
+                markers_3d_array,
+                keypoint_ensemble_list,
+                smooth_param=None,
+                s_frames=[(None, None)],
+                blocks=[],
+            )
+            # put results into new dataframe
+            for k, keypoint_name in enumerate(keypoint_ensemble_list):
+                keypoint_df = df_dicts[k][keypoint_name + '_df']
+                df_eks = populate_output_dataframe(keypoint_df, keypoint_name, df_eks)
+
+            # save eks results
+            os.makedirs(save_dir, exist_ok=True)
+            df_eks.to_csv(save_file)
+
+    # Step 2: Extract center frame results
+    print('Extracting center frame results from all sessions.')
+    for session, frame in session_frame_info:
+        # Construct the path to the saved EKS results
+        save_file = os.path.join(eks_save_dir, 'eks', session, frame.replace('png', 'csv'))
+        if not os.path.exists(save_file):
+            print(f'Missing EKS file for {session}/{frame}. Skipping.')
+            continue
+
+        # read csv
+        df_eks = pd.read_csv(save_file, header=[0, 1, 2], index_col=0)
+        
+        # extract result from center frame
+        assert df_eks.shape[0] & 2 != 0
+        idx_frame = int(np.floor(df_eks.shape[0] / 2))
+        frame_file = frame.replace('.mp4', '.png')
+        index_name = f'labeled-data/{session}/{frame_file}'
+        result = df_eks[df_eks.index == idx_frame].rename(index={idx_frame: index_name})
+        results_list.append(result)
+
+    # save final predictions
+    results_df = pd.concat(results_list)
+    results_df.sort_index(inplace=True)
+    # add "set" column so this df is interpreted as labeled data predictions
+    results_df.loc[:, ("set", "", "")] = "train"
+    results_df.to_csv(os.path.join(eks_save_dir, 'eks', 'predictions_new.csv'))
+
+    return df_eks, dfs_markers
+
+
+def collect_preds(model_dirs_list, snippets_dir):
+    for model_dir in tqdm(model_dirs_list):
+        results_list = []
+        sessions = os.listdir(snippets_dir)
+        for session in sessions:
+            frames = os.listdir(os.path.join(snippets_dir, session))
+            for frame in frames:
+                # Load prediction on snippet
+                df = pd.read_csv(
+                    os.path.join(model_dir, 'video_preds_labeled', session, frame.replace('.mp4', '.csv')), 
+                    header=[0, 1, 2], 
+                    index_col=0,
+                )
+                # Extract result from center frame
+                assert df.shape[0] & 2 != 0
+                idx_frame = int(np.floor(df.shape[0] / 2))
+                frame_file = frame.replace('.mp4', '.png')
+                index_name = f'labeled-data/{session}/{frame_file}'
+                result = df[df.index == idx_frame].rename(index={idx_frame: index_name})
+                results_list.append(result)
+
+        # Save final predictions
+        results_df = pd.concat(results_list)
+        results_df.sort_index(inplace=True)
+        # Add "set" column so this df is interpreted as labeled data predictions
+        results_df.loc[:, ("set", "", "")] = "train"
+        results_df.to_csv(os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv'))
+
+
+def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
+    markers_list = []
+    for model_dir in model_dirs_list:
+        csv_file = os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv')
+        df_tmp = pd.read_csv(csv_file, header=[0, 1, 2], index_col=0)
+        preds_curr = df_tmp.to_numpy()[:, :-1]  # remove "set" column
+        preds_curr = np.delete(preds_curr, list(range(2, preds_curr.shape[1], 3)), axis=1)
+        preds_curr = np.reshape(preds_curr, (preds_curr.shape[0], -1, 2))
+        markers_list.append(preds_curr[..., None])
+    
+    # Concatenate across last dim
+    pred_arrays = np.concatenate(markers_list, axis=3)
+    
+    # Compute mean/median across x/y
+    if post_processor_type == 'ens-mean':
+        ens_mean = np.mean(pred_arrays, axis=3)
+    elif post_processor_type == 'ens-median':
+        ens_mean = np.median(pred_arrays, axis=3)
+    
+    ens_likelihood = np.nan * np.zeros((ens_mean.shape[0], ens_mean.shape[1], 1))
+    
+    # Build dataframe
+    xyl = np.concatenate([ens_mean, ens_likelihood], axis=2)
+    df_final = pd.DataFrame(
+        xyl.reshape(ens_mean.shape[0], -1), 
+        columns=df_tmp.columns[:-1],  # remove "set" column, add back in later
+        index=df_tmp.index
+    )
+    df_final.sort_index(inplace=True)
+    # Add "set" column so this df is interpreted as labeled data predictions
+    df_final.loc[:, ("set", "", "")] = "train"
+    save_dir_ = os.path.join(eks_save_dir, f'{post_processor_type}')
+    os.makedirs(save_dir_, exist_ok=True)
+    df_final.to_csv(os.path.join(save_dir_, 'predictions_new.csv'))
+
+
+def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, save_dir):
+    # Load and prepare the configuration
+    cfg_file = os.path.join(config_dir, f"config_{dataset_name}.yaml")
+    cfg = DictConfig(yaml.safe_load(open(cfg_file)))
+    
+    model_cfg = cfg.copy()
+    model_cfg.data.data_dir = data_dir
+    model_cfg.data.csv_file = ground_truth_csv
+    model_cfg.training.imgaug = "default"
+    model_cfg.training.train_prob = 1
+    model_cfg.training.val_prob = 0
+    model_cfg.training.train_frames = 1
+
+    # Initialize dataset and data module
+    imgaug_transform = get_imgaug_transform(cfg=model_cfg)
+    dataset = get_dataset(cfg=model_cfg, data_dir=model_cfg.data.data_dir, imgaug_transform=imgaug_transform)
+    data_module = get_data_module(cfg=model_cfg, dataset=dataset, video_dir=os.path.join(data_dir, dataset_name, "videos"))
+    data_module.setup()
+
+    # Compute metrics on aEKS ensemble members
+    for model_dir in model_dirs_list:
+        print(model_dir)
+        preds_file = os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv')
+        compute_metrics(cfg=model_cfg, preds_file=preds_file, data_module=data_module)
+
+    # Compute metrics on post-processed traces
+    post_processor_types = ["ens-mean", "ens-median", "eks"]
+    for post_processor_type in post_processor_types:
+        print(f'{post_processor_type}')
+        preds_file = os.path.join(save_dir, f'{post_processor_type}', 'predictions_new.csv')
+        compute_metrics(cfg=model_cfg, preds_file=preds_file, data_module=data_module)
