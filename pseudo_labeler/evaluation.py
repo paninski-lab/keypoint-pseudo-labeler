@@ -323,6 +323,11 @@ def run_eks_on_snippets(snippets_dir, model_dirs_list, eks_save_dir, ground_trut
             df_eks.to_csv(save_file)
 
     # Step 2: Extract center frame results
+    final_predictions_file = os.path.join(eks_save_dir, 'eks', 'predictions_new.csv')
+    if os.path.exists(final_predictions_file):
+        print(f'Final predictions file {final_predictions_file} already exists. Skipping extraction.')
+        return None, None
+
     print('Extracting center frame results from all sessions.')
     for session, frame in session_frame_info:
         # Construct the path to the saved EKS results
@@ -354,6 +359,11 @@ def run_eks_on_snippets(snippets_dir, model_dirs_list, eks_save_dir, ground_trut
 
 def collect_preds(model_dirs_list, snippets_dir):
     for model_dir in tqdm(model_dirs_list):
+        results_file = os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv')
+        if os.path.exists(results_file):
+            print(f'Predictions file {results_file} already exists. Skipping model {model_dir}.')
+            continue
+        
         results_list = []
         sessions = os.listdir(snippets_dir)
         for session in sessions:
@@ -378,10 +388,17 @@ def collect_preds(model_dirs_list, snippets_dir):
         results_df.sort_index(inplace=True)
         # Add "set" column so this df is interpreted as labeled data predictions
         results_df.loc[:, ("set", "", "")] = "train"
-        results_df.to_csv(os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv'))
+        results_df.to_csv(results_file)
 
 
 def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
+    save_dir_ = os.path.join(eks_save_dir, f'{post_processor_type}')
+    results_file = os.path.join(save_dir_, 'predictions_new.csv')
+    
+    if os.path.exists(results_file):
+        print(f'Predictions file {results_file} already exists. Skipping computation for {post_processor_type}.')
+        return
+
     markers_list = []
     for model_dir in model_dirs_list:
         csv_file = os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv')
@@ -412,9 +429,8 @@ def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
     df_final.sort_index(inplace=True)
     # Add "set" column so this df is interpreted as labeled data predictions
     df_final.loc[:, ("set", "", "")] = "train"
-    save_dir_ = os.path.join(eks_save_dir, f'{post_processor_type}')
     os.makedirs(save_dir_, exist_ok=True)
-    df_final.to_csv(os.path.join(save_dir_, 'predictions_new.csv'))
+    df_final.to_csv(results_file)
 
 
 def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, save_dir):
@@ -437,9 +453,15 @@ def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth
     data_module.setup()
 
     # Compute metrics on aEKS ensemble members
-    for model_dir in model_dirs_list:
+    for model_dir in tqdm(model_dirs_list):
         print(model_dir)
         preds_file = os.path.join(model_dir, 'video_preds_labeled', 'predictions_new.csv')
+        metrics_file = os.path.join(model_dir, 'video_preds_labeled', 'metrics_results.csv')
+        
+        if os.path.exists(metrics_file):
+            print(f'Metrics file {metrics_file} already exists. Skipping model {model_dir}.')
+            continue
+        
         compute_metrics(cfg=model_cfg, preds_file=preds_file, data_module=data_module)
 
     # Compute metrics on post-processed traces
@@ -447,4 +469,151 @@ def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth
     for post_processor_type in post_processor_types:
         print(f'{post_processor_type}')
         preds_file = os.path.join(save_dir, f'{post_processor_type}', 'predictions_new.csv')
+        metrics_file = os.path.join(save_dir, f'{post_processor_type}', 'metrics_results.csv')
+        
+        if os.path.exists(metrics_file):
+            print(f'Metrics file {metrics_file} already exists. Skipping post-processor {post_processor_type}.')
+            continue
+        
         compute_metrics(cfg=model_cfg, preds_file=preds_file, data_module=data_module)
+
+
+def standardize_scorer_level(df, new_scorer='standard_scorer'):
+    """
+    Standardizes the 'scorer' level in the MultiIndex to a common name.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to standardize.
+    new_scorer : str
+        The new name for the 'scorer' level.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with the standardized 'scorer' level.
+    """
+    df.columns = pd.MultiIndex.from_tuples(
+        [(new_scorer, bodypart, coord) for scorer, bodypart, coord in df.columns],
+        names=df.columns.names
+    )
+    return df
+
+
+def compute_ensemble_stddev(
+    df_ground_truth,
+    df_preds,
+    keypoint_ensemble_list,
+    scorer_name='standard_scorer'
+):
+    """
+    Parameters
+    ----------
+    df_ground_truth : List[pd.DataFrame]
+        ground truth predictions
+    df_preds : List[pd.DataFrame]
+        model predictions
+    keypoint_ensemble_list : List[str]
+        keypoints to include in the analysis
+
+    Returns
+    -------
+    np.ndarray
+        shape (n_frames, n_keypoints)
+    """
+    # Initial check for NaNs in df_preds
+    for i, df in enumerate(df_preds):
+        if df.isna().any().any():
+            print(f"Warning: NaN values detected in initial DataFrame {i}.")
+            nan_indices = df[df.isna().any(axis=1)].index
+            nan_columns = df.columns[df.isna().any()]
+            print(f"NaN values found at indices: {nan_indices} in columns: {nan_columns}")
+
+    preds = []
+    cols_order = None
+    for i, df in enumerate(df_preds):
+        assert np.all(df.index == df_ground_truth.index), f"Index mismatch between ground truth and predictions at dataframe {i}"
+        
+        # Standardize the 'scorer' level
+        df = standardize_scorer_level(df, scorer_name)
+        
+        # Remove likelihood columns
+        cols_to_keep = [col for col in df.columns if not col[2].endswith('_likelihood') and 'zscore' not in col[2]]
+        # Keep only columns matching the keypoint_ensemble_list
+        cols_to_keep = [col for col in cols_to_keep if col[1] in keypoint_ensemble_list]
+        df = df[cols_to_keep]
+        
+        print(f"DataFrame {i} kept columns:", df.columns)
+        
+        # Check for NaNs in the DataFrame
+        if df.isna().any().any():
+            print(f"Warning: NaN values detected in DataFrame {i} after filtering.")
+            nan_indices = df[df.isna().any(axis=1)].index
+            nan_columns = df.columns[df.isna().any()]
+            print(f"NaN values found at indices: {nan_indices} in columns: {nan_columns}")
+        
+        # Print the order of the column headers
+        if cols_order is None:
+            cols_order = df.columns
+        else:
+            if not (df.columns == cols_order).all():
+                print(f"Column order mismatch detected in DataFrame {i}")
+                print("Expected order:", cols_order)
+                print("Actual order:", df.columns)
+                # Ensure bodyparts and coordinates are consistent
+                expected_bodyparts_coords = cols_order.droplevel(0).unique()
+                actual_bodyparts_coords = df.columns.droplevel(0).unique()
+                if not expected_bodyparts_coords.equals(actual_bodyparts_coords):
+                    print("Bodyparts and coordinates mismatch detected")
+                    print("Expected bodyparts and coordinates:", expected_bodyparts_coords)
+                    print("Actual bodyparts and coordinates:", actual_bodyparts_coords)
+        
+        # Reshape the DataFrame to the appropriate shape
+        try:
+            arr = df.to_numpy().reshape(df.shape[0], -1, 2)
+        except ValueError as e:
+            print(f"Reshape error: {e}")
+            print(f"DataFrame shape: {df.shape}")
+            print(f"Array shape after reshape attempt: {df.to_numpy().shape}")
+            raise
+        
+        preds.append(arr[..., None])
+    
+    preds = np.concatenate(preds, axis=3)
+    
+    # Check for NaNs in preds
+    if np.isnan(preds).any():
+        print("Warning: NaN values detected in preds array.")
+        nan_indices = np.argwhere(np.isnan(preds))
+        print(f"NaN values found at indices: {nan_indices}")
+    else:
+        print("No NaN values detected in preds array.")
+    
+    stddevs = np.std(preds, axis=-1).mean(axis=-1)
+    print(f"Stddevs: {stddevs}")
+    return stddevs
+
+
+def compute_percentiles(arr, std_vals, percentiles):
+    num_pts = arr[0]
+    vals = []
+    prctiles = []
+    for p in percentiles:
+        v = num_pts * p / 100
+        idx = np.argmin(np.abs(arr - v))
+        # maybe we don't have enough data
+        if idx == len(arr) - 1:
+            p_ = arr[idx] / num_pts * 100
+        else:
+            p_ = p
+        vals.append(std_vals[idx])
+        prctiles.append(p_)
+    return vals, prctiles
+
+
+def cleanaxis(ax):
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(top=False)
+    ax.tick_params(right=False)

@@ -424,7 +424,7 @@ def train_and_infer(
         for video_file in video_files:
             if inference_csv_detailed_naming:
                 inference_csv_name = (
-                    f"hand={train_frames or cfg_lp.training.train_frames}_rng={k}_"
+                    f"hand={cfg['n_hand_labels']}_rng={k}_"
                     f"pseudo={n_pseudo_labels or cfg['n_pseudo_labels']}_"
                     f"{pseudo_labeler or cfg['pseudo_labeler']}_{selection_strategy or cfg['selection_strategy']}_"
                     f"rng={ensemble_seed_start or cfg['ensemble_seeds'][0]}-{ensemble_seed_end or cfg['ensemble_seeds'][-1]}_"
