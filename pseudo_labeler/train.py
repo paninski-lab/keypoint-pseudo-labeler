@@ -362,25 +362,20 @@ def train_and_infer(
     k: int,
     data_dir: str,
     results_dir: str,
-    min_steps: int,
-    max_steps: int,
-    milestone_steps: int,
-    val_check_interval: int,
-    video_directories: List[str],
-    inference_csv_detailed_naming: bool = False,
-    train_frames: Optional[int] = None,
-    n_pseudo_labels: Optional[int] = None,
-    pseudo_labeler: Optional[str] = None,
-    selection_strategy: Optional[str] = None,
-    ensemble_seed_start: Optional[int] = None,
-    ensemble_seed_end: Optional[int] = None,
+    csv_prefix: Optional[str] = None,
     new_labels_csv: Optional[str] = None
 ) -> None:
+
+    # Parse params from config
+    min_steps=cfg["min_steps"]
+    max_steps=cfg["max_steps"]
+    milestone_steps=cfg["milestone_steps"]
+    val_check_interval=cfg["val_check_interval"]
+    video_directories=cfg["video_directories"]
 
     # Update config
     cfg_lp.data.data_dir = data_dir
     cfg_lp.training.rng_seed_data_pt = k
-    #TODO: Tommy - is this correct?
     cfg_lp.training.rng_seed_model_pt = k
     if new_labels_csv is not None:
         cfg_lp.data.csv_file = new_labels_csv
@@ -422,16 +417,11 @@ def train_and_infer(
     for video_dir in video_directories:
         video_files = [f for f in os.listdir(os.path.join(data_dir, video_dir)) if f.endswith('.mp4')]
         for video_file in video_files:
-            if inference_csv_detailed_naming:
-                inference_csv_name = (
-                    f"hand={train_frames or cfg_lp.training.train_frames}_rng={k}_"
-                    f"pseudo={n_pseudo_labels or cfg['n_pseudo_labels']}_"
-                    f"{pseudo_labeler or cfg['pseudo_labeler']}_{selection_strategy or cfg['selection_strategy']}_"
-                    f"rng={ensemble_seed_start or cfg['ensemble_seeds'][0]}-{ensemble_seed_end or cfg['ensemble_seeds'][-1]}_"
-                    f"{video_file.replace('.mp4', '.csv')}"
-                )
+            if csv_prefix:
+                inference_csv_name = f'{csv_prefix}_{video_file.replace(".mp4", ".csv")}'
             else:
                 inference_csv_name = video_file.replace(".mp4", ".csv")
+                
             
             inference_csv = os.path.join(results_dir, "video_preds", inference_csv_name)
             
