@@ -29,7 +29,7 @@ pseudo_labeler: eks
 # options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
-selection_strategy: hand
+selection_strategy: random
 # options: random, hand
 
 # datasetname:

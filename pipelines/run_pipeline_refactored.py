@@ -145,7 +145,7 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
     # # -------------------------------------------------------------------------------------
-
+    
     print(f"Total number of videos: {num_videos}")
     selection_strategy = cfg["selection_strategy"]
     selection_strategy = cfg["selection_strategy"]
@@ -160,7 +160,7 @@ def pipeline(config_file: str):
 
     # Create a new directory for combined hand labels and pseudo labels
     hand_label_and_pseudo_label_dir = os.path.join(parent_dir, (
-        f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+        f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
         f"pseudo={cfg['n_pseudo_labels']}/pseudo_label_and_hand_label"
     ))
     os.makedirs(hand_label_and_pseudo_label_dir, exist_ok=True)
@@ -172,7 +172,16 @@ def pipeline(config_file: str):
         seed_labels = hand_labels.copy()
         frame_idxs = []
         preds_csv_path = None
-        
+        results_dir = os.path.join(
+            parent_dir, (
+                f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
+                f"pseudo={cfg['n_pseudo_labels']}/results_aeks_{cfg['selection_strategy']}/rng{k}"
+            )
+        )
+        if os.path.exists(results_dir):
+            print(f'Path for {results_dir} already exists. Skipping frame selection.')
+            continue
+
         print(f'Using a {selection_strategy} pseudo-label selection strategy.')
 
         # Random selection strategy
@@ -194,7 +203,7 @@ def pipeline(config_file: str):
                     csv_filename = base_name + ".csv"
                     
                     preds_csv_path = os.path.join(parent_dir, (
-                            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+                            f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
                             f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
                             f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
                         ),
@@ -204,7 +213,7 @@ def pipeline(config_file: str):
                     selected_frame_idxs.extend(frame_idxs)
                     
                     frame_idxs = frame_idxs.astype(int)
-                    print(f'Selected frame indices: {frame_idxs}')
+                    print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
                     
                     # export frames to labeled data directory
                     export_frames(
@@ -262,31 +271,14 @@ def pipeline(config_file: str):
             preds_csv_path = unsampled_path
 
             frame_idxs = frame_idxs.astype(int)
-            print(f'Selected frame indices: {frame_idxs}')
-            
-            # Read predictions CSV
+            print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
+
             preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
             mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
             preds_df = preds_df.loc[:, mask]
             
-            # Ensure frame indices match the CSV format
-            def generate_formatted_index(idx):
-                # Assuming video_dir and base_name are necessary to match the format
-                video_dir = "test_vid"  # Update this to match your actual video directory structure
-                base_name = "test_vid"  # Update this to match your actual base name structure
-                return f"labeled-data/{video_dir}/{base_name}/img{str(idx).zfill(8)}.png"
-            
-            formatted_frame_idxs = [generate_formatted_index(idx) for idx in frame_idxs]
-            print(f'Formatted frame indices: {formatted_frame_idxs}')
-            
             # Subselect the predictions corresponding to frame_idxs
-            subselected_preds = preds_df[preds_df.index.isin(formatted_frame_idxs)]
-            
-            def generate_new_index(idx):
-                return f"labeled-data/img{str(idx).zfill(8)}.png"
-
-            new_index = [generate_new_index(idx) for idx in subselected_preds.index]
-            subselected_preds.index = new_index
+            subselected_preds = preds_df.iloc[frame_idxs]
 
             print(f'adjusted: {subselected_preds}')
 
@@ -313,13 +305,13 @@ def pipeline(config_file: str):
             seed_labels = pd.concat([seed_labels, subselected_preds])
 
         # Export the combined hand labels and pseudo labels for this seed
-        combined_csv_filename = f"CollectedData_hand={cfg_lp.training.train_frames}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
+        combined_csv_filename = f"CollectedData_hand={cfg['n_hand_labels']}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
         combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
         seed_labels.to_csv(combined_csv_path)
         print(f"Saved combined hand labels and pseudo labels for seed {k} to {combined_csv_path}")
 
         # Check number of labels for this seed
-        expected_total_labels = cfg_lp.training.train_frames + cfg["n_pseudo_labels"]
+        expected_total_labels = cfg['n_hand_labels'] + cfg["n_pseudo_labels"]
         if seed_labels.shape[0] != expected_total_labels:
             print(f"Warning: Number of labels for seed {k} ({seed_labels.shape[0]}) does not match expected count ({expected_total_labels})")
         else:
@@ -334,7 +326,7 @@ def pipeline(config_file: str):
         # Define the results directory for this seed
         results_dir = os.path.join(
             parent_dir, (
-                f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+                f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
                 f"pseudo={cfg['n_pseudo_labels']}/results_aeks_{cfg['selection_strategy']}/rng{k}"
             )
         )
@@ -367,12 +359,12 @@ def pipeline(config_file: str):
     # # # -------------------------------------------------------------------------------------
     pseudo_labeler = 'eks'
     input_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
             f"pseudo={cfg['n_pseudo_labels']}/results_aeks_{cfg['selection_strategy']}/"
         )
     )
     results_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+            f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
             f"pseudo={cfg['n_pseudo_labels']}/results_aeks_{cfg['selection_strategy']}/"
             f"{pseudo_labeler}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
         )
