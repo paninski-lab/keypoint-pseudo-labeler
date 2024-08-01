@@ -18,192 +18,117 @@ from pseudo_labeler.evaluation import (
     process_csv_for_sessions_and_frames,
     run_eks_on_snippets,
     run_inference_on_snippets,
+    run_ood_pipeline
 )
 from pseudo_labeler.frame_selection import (
     export_frames,
     select_frame_idxs_hand,
     select_frame_idxs_random,
+    pick_n_hand_labels,
+    process_predictions,
+    update_seed_labels
 )
 from pseudo_labeler.train import inference_with_metrics, train, train_and_infer
-from pseudo_labeler.utils import format_data_walk, pipeline_eks
+from pseudo_labeler.utils import format_data_walk, pipeline_eks, load_cfgs, find_video_names
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../eks')))
 
 def pipeline(config_file: str):
 
-    # load pipeline config file
-    with open(config_file, "r") as file:
-        cfg = yaml.safe_load(file)
-        
-    # load lightning pose config file from the path specified in pipeline config
-    lightning_pose_config_path = cfg.get("lightning_pose_config")
-    with open(lightning_pose_config_path, "r") as file:
-        lightning_pose_cfg = yaml.safe_load(file)
-    
-    cfg_lp = DictConfig(lightning_pose_cfg)
+    # ------
+    # Setup
+    # ------
+
+    # Load cfg (pipeline yaml) and cfg_lp (lp yaml)
+    cfg, cfg_lp = load_cfgs(config_file)  # cfg_lp is a DictConfig, cfg is not
+
+    # Define + create directories
     data_dir = cfg_lp.data.data_dir
-    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
+    outputs_dir = os.path.join(parent_dir, (
+        f'../outputs/{os.path.basename(data_dir)}'
+        f'hand={cfg["n_hand_labels"]}_pseudo={cfg["n_pseudo_labels"]}'
+        ))
+    networks_dir = os.path.join(outputs_dir, 'networks')
+    pp_dir = os.path.join(outputs_dir, 'post-processors',
+        f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}")
+    os.makedirs(outputs_dir, exist_ok=True)
+    os.makedirs(networks_dir, exist_ok=True)
+    os.makedirs(pp_dir, exist_ok=True)
+
+    # Build list of video names from the video directory
+    num_videos, video_names = find_video_names(data_dir, cfg["video_directories"])
+    print(f'Found {num_videos} videos: {video_names}.')
     
     # -------------------------------------------------------------------------------------
-    # train k supervised models on n hand-labeled frames and compute labeled OOD metrics
-    # -------------------------------------------------------------------------------------
-    print(f'training {len(cfg["ensemble_seeds"])} baseline models')
-    eks_input_csv_names = []  # save for EKS
+    # Train k supervised models on n hand-labeled frames and compute labeled OOD metrics
+    # -------------------------------------------------------------------------------------  
 
-    num_videos = 0
-    for video_dir in cfg["video_directories"]:
-        video_files = os.listdir(os.path.join(data_dir, video_dir))
-        num_videos += len(video_files)   
+    # Pick n hand labels. Make two csvs: one with the labels, one with the leftovers
+    subsample_path = pick_n_hand_labels(cfg, cfg_lp, data_dir, outputs_dir)
 
-    # Set pipeline seed
-    np.random.seed(cfg["pipeline_seeds"])
-
-    # Create subsample file
-    subsample_filename = f"CollectedData_hand={cfg['n_hand_labels']}_p={cfg['pipeline_seeds']}.csv"
-    unsampled_filename = f"CollectedData_hand={cfg['n_hand_labels']}_p={cfg['pipeline_seeds']}_unsampled.csv"
-    unsampled_filename = f"CollectedData_hand={cfg['n_hand_labels']}_p={cfg['pipeline_seeds']}_unsampled.csv"
-    subsample_dir = os.path.join(parent_dir, f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_pseudo={cfg['n_pseudo_labels']}/")
-    os.makedirs(subsample_dir, exist_ok=True)
-    subsample_path = os.path.join(subsample_dir, subsample_filename)
-    unsampled_path = os.path.join(subsample_dir, unsampled_filename)
-    unsampled_path = os.path.join(subsample_dir, unsampled_filename)
-
-    # Load the full dataset and create the initial subsample csv
-    collected_data = pd.read_csv(os.path.join(data_dir, "CollectedData.csv"), header=[0,1,2])
-    initial_subsample = collected_data.sample(n=cfg['n_hand_labels'])
-    initial_subsample.to_csv(subsample_path, index=False)
-    print(f"Saved initial subsample hand labels CSV file: {subsample_path}")
-
-    # and also create the unsampled csv
-    initial_indices = initial_subsample.index
-    unsampled = collected_data.drop(index=initial_indices)
-    unsampled.to_csv(unsampled_path, index=False)
-    print(f"Saved unsampled hand labels CSV file: {unsampled_path}")
-
-    #print(f"Saved initial subsample hand labels CSV file: {subsample_path}")
-
+    # ||| Main first-round training loop |||
+    # loops over ensemble seeds training a model for each seed with n hand_labels
+    print(f'Training {len(cfg["ensemble_seeds"])} baseline models.')
     for k in cfg["ensemble_seeds"]:
-
-        # Define the output directory
-        results_dir = os.path.join(parent_dir, (
-        f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
-        f"pseudo={cfg['n_pseudo_labels']}/networks/rng{k}"
-        ))
-        os.makedirs(results_dir, exist_ok=True)  
-
-        # Set the seed for reproducibility
-        np.random.seed(k)
-
+        # Make directory for rng{seed}
+        results_dir = os.path.join(networks_dir, f'rng{k}')
+        os.makedirs(results_dir, exist_ok=True)
+        # Main function call
         train_and_infer(
             cfg=cfg.copy(),
             cfg_lp=cfg_lp.copy(),
             k=k,
             data_dir=data_dir,
             results_dir=results_dir,
-            min_steps=cfg["min_steps"],
-            max_steps=cfg["max_steps"],
-            milestone_steps=cfg["milestone_steps"],
-            val_check_interval=cfg["val_check_interval"],
-            video_directories=cfg["video_directories"],
-            inference_csv_detailed_naming=False,
             new_labels_csv = subsample_path # Set to None to use the original csv_file
         )
 
-
     # # # -------------------------------------------------------------------------------------
-    # # # post-process network outputs to generate potential pseudo labels (chosen in the next step)
+    # # # Post-process network outputs to generate potential pseudo labels (chosen in the next step)
     # # # -------------------------------------------------------------------------------------
     pseudo_labeler = cfg["pseudo_labeler"]
 
-    input_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
-            f"pseudo={cfg['n_pseudo_labels']}/networks/"
-        )
-    )
-    results_dir = os.path.join(parent_dir, (
-            f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
-            f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
-            f"{pseudo_labeler}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
-        )
-    )
-    if os.path.exists(results_dir):
-        print(f"\n\n\n\n{pseudo_labeler} directory {results_dir} already exists. Skipping post-processing\n.\n.\n.\n")
-    else:
-        print(f"Post-Processing Network Outputs using method: {pseudo_labeler}\n.\n.\n.\n")
-        os.makedirs(results_dir, exist_ok=True)
-        data_type = cfg["data_type"]
-        output_df = None
+    # Collect input csv names from video names; skip existing ones
+    input_csv_names = []
+    for video_name in video_names:
+        csv_name = video_file.replace(".mp4", ".csv")
+        csv_path = os.path.join(pp_dir, video_name)
+        if os.path.exists(csv_path):
+            print(f"{csv_path} already exists. Skipping post-processing.")
+        else:
+            input_csv_names.append(csv_name)
+    
+    print(f'Post-processing the following videos using {pseudo_labeler}: {input_csv_names}')
 
-        # Collect input csv names from video directory
-        input_csv_names = []
-        for video_dir in cfg["video_directories"]:
-            video_files = os.listdir(os.path.join(data_dir, video_dir))
-            for video_file in video_files:
-                csv_name = video_file.replace(".mp4", ".csv")
-                if csv_name not in input_csv_names:
-                    print(f'Appending: {csv_name} to post-processing input csv list')
-                    input_csv_names.append(csv_name)
-
-        if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
-            pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir)
+    # ||| Main EKS function call ||| pipeline_eks will also handle ensemble_mean baseline
+    if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
+        pipeline_eks(input_csv_names, networks_dir, cfg["data_type"], pseudo_labeler, cfg_lp, pp_dir)
 
 
     # # -------------------------------------------------------------------------------------
     # # run inference on OOD snippets (if specified) -- using network models
     # # -------------------------------------------------------------------------------------
 
-    dataset_name = os.path.basename(cfg_lp.data.data_dir)
-    n_hand_labels = cfg['n_hand_labels']
-    n_pseudo_labels = cfg["n_pseudo_labels"]
-    seeds= cfg["ensemble_seeds"]
-    keypoint_ensemble_list = cfg_lp.data.keypoint_names
-
-    # where the video snippets are stored
-    snippets_dir = f"{data_dir}/videos-for-each-labeled-frame"
-    # where the network models are stored
-    networks_dir = f"/teamspace/studios/this_studio/outputs/{dataset_name}/hand={n_hand_labels}_pseudo={n_pseudo_labels}/networks"
-    # where to save eks/post-processor outputs
-    eks_save_dir = f"/teamspace/studios/this_studio/outputs/{dataset_name}/hand={n_hand_labels}_pseudo={n_pseudo_labels}/post-processors/eks_rng={seeds[0]}-{seeds[-1]}/eks_ood_snippets"
-    # where model configs are stored
-    config_dir = f"/teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/"
-    # file name of csv where marker data is stored
-    ground_truth_csv = 'CollectedData_new.csv'
-
-    model_dirs_list = find_model_dirs(networks_dir, 'rng')
-    print(f"Found {len(model_dirs_list)} network model directories")
-
     if cfg["ood_snippets"]:
         print(f'Starting OOD snippet analysis for {dataset_name}')
-        # Step 1: Run inference on video snippets
-        ground_truth_df = pd.read_csv(os.path.join(data_dir, ground_truth_csv), skiprows=2)
-        run_inference_on_snippets(model_dirs_list, data_dir, snippets_dir, ground_truth_df)
-
-        # Step 2: Run EKS
-        df_eks, dfs_markers = run_eks_on_snippets(snippets_dir, model_dirs_list, eks_save_dir, ground_truth_df, keypoint_ensemble_list)
-
-        # Step 3.1: Collect preds from individual models
-        collect_preds(model_dirs_list, snippets_dir)
-
-        # Step 3.2: Compute ens mean and median
-        compute_ens_mean_median(model_dirs_list, eks_save_dir, 'ens-mean')
-        compute_ens_mean_median(model_dirs_list, eks_save_dir, 'ens-median')
-
-        # Step 4: Compute metrics
-        compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, eks_save_dir)
+        run_ood_pipeline(
+            cfg=cfg,
+            cfg_lp=cfg_lp,
+            data_dir=data_dir,
+            networks_dir=networks_dir,
+            pp_dir=pp_dir,
+            pseudo_labeler=pseudo_labeler
+        )
 
     # # -------------------------------------------------------------------------------------
     # # select frames to add to the dataset
     # # -------------------------------------------------------------------------------------
-    
-    print(f"Total number of videos: {num_videos}")
-    selection_strategy = cfg["selection_strategy"]
     selection_strategy = cfg["selection_strategy"]
     print(
-        f'selecting {cfg["n_pseudo_labels"]} pseudo-labels using {cfg["pseudo_labeler"]} '
-        f'({selection_strategy} strategy)'
-        f'({selection_strategy} strategy)'
+        f'Selecting {cfg["n_pseudo_labels"]} pseudo-labels from {num_videos} {cfg["pseudo_labeler"]} '
+        f'outputs using ({selection_strategy} strategy)'
     )
 
     selected_frame_idxs = []    
@@ -235,24 +160,20 @@ def pipeline(config_file: str):
 
         print(f'Using a {selection_strategy} pseudo-label selection strategy.')
 
-        # Random selection strategy
         if selection_strategy == 'random':
             frames_per_video = int(cfg["n_pseudo_labels"] / num_videos)
             print(f"Frames per video: {frames_per_video}")
             for video_dir in cfg["video_directories"]:
                 video_files = os.listdir(os.path.join(data_dir, video_dir))
-                for video_file in video_files:         
+                for video_file in video_files:
                     video_path = os.path.join(data_dir, video_dir, video_file)
-
                     frame_idxs = select_frame_idxs_random(
                         video_file=video_path,
                         n_frames_to_select=frames_per_video,
                         seed=k
                     )
-
                     base_name = os.path.splitext(os.path.basename(video_file))[0]
                     csv_filename = base_name + ".csv"
-                    
                     preds_csv_path = os.path.join(parent_dir, (
                             f"../outputs/{os.path.basename(data_dir)}/hand={cfg['n_hand_labels']}_"
                             f"pseudo={cfg['n_pseudo_labels']}/post-processors/"
@@ -260,15 +181,12 @@ def pipeline(config_file: str):
                         ),
                         csv_filename
                     )
-
                     selected_frame_idxs.extend(frame_idxs)
-                    
                     frame_idxs = frame_idxs.astype(int)
                     print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
                     
-                    # export frames to labeled data directory
                     export_frames(
-                        video_file = video_path,
+                        video_file=video_path,
                         save_dir=os.path.join(labeled_data_dir, os.path.splitext(os.path.basename(video_file))[0]),
                         frame_idxs=frame_idxs,
                         format="png",
@@ -277,43 +195,11 @@ def pipeline(config_file: str):
                     )
                     
                     preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
-                    mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
-                    preds_df = preds_df.loc[:, mask]
-                    
-                    # subselect the predictions corresponding to frame_idxs
-                    subselected_preds = preds_df[preds_df.index.isin(frame_idxs)]
-
-                    def generate_new_index(idx, base_name):
-                        return f"labeled-data/{base_name}/img{str(idx).zfill(8)}.png"
-
-                    new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
-                    subselected_preds.index = new_index
-
+                    subselected_preds = process_predictions(preds_df, frame_idxs, base_name)
                     print(f'adjusted: {subselected_preds}')
 
-                    standard_scorer_name = 'standard_scorer'
+                    seed_labels = update_seed_labels(seed_labels, subselected_preds)
 
-                    new_columns = pd.MultiIndex.from_arrays([
-                        [standard_scorer_name] * len(subselected_preds.columns),
-                        subselected_preds.columns.get_level_values('bodyparts'),
-                        subselected_preds.columns.get_level_values('coords')
-                    ], names=['scorer', 'bodyparts', 'coords'])
-
-                    # Assign new column index to subselected_preds
-                    subselected_preds.columns = new_columns
-
-                    # seed_labelsuses the standardized scorer
-                    if not seed_labels.empty:
-                        seed_labels.columns = pd.MultiIndex.from_arrays([
-                            [standard_scorer_name] * len(seed_labels.columns),
-                            seed_labels.columns.get_level_values('bodyparts'),
-                            seed_labels.columns.get_level_values('coords')
-                        ], names=['scorer', 'bodyparts', 'coords'])
-                    
-                    # append pseudo labels to hand labels for this seed
-                    seed_labels = pd.concat([seed_labels, subselected_preds])
-        
-        # Hand selection strategy
         elif selection_strategy == 'hand':
             frame_idxs = select_frame_idxs_hand(
                 hand_labels_csv=unsampled_path,
@@ -321,40 +207,15 @@ def pipeline(config_file: str):
                 seed=k
             )
             preds_csv_path = unsampled_path
-
             frame_idxs = frame_idxs.astype(int)
             print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
-
+            
             preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
-            mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
-            preds_df = preds_df.loc[:, mask]
-            
-            # Subselect the predictions corresponding to frame_idxs
-            subselected_preds = preds_df.iloc[frame_idxs]
-
+            base_name = os.path.splitext(os.path.basename(preds_csv_path))[0]
+            subselected_preds = process_predictions(preds_df, frame_idxs, base_name)
             print(f'adjusted: {subselected_preds}')
-
-            standard_scorer_name = 'standard_scorer'
-
-            new_columns = pd.MultiIndex.from_arrays([
-                [standard_scorer_name] * len(subselected_preds.columns),
-                subselected_preds.columns.get_level_values('bodyparts'),
-                subselected_preds.columns.get_level_values('coords')
-            ], names=['scorer', 'bodyparts', 'coords'])
-
-            # Assign new column index to subselected_preds
-            subselected_preds.columns = new_columns
-
-            # seed_labels uses the standardized scorer
-            if not seed_labels.empty:
-                seed_labels.columns = pd.MultiIndex.from_arrays([
-                    [standard_scorer_name] * len(seed_labels.columns),
-                    seed_labels.columns.get_level_values('bodyparts'),
-                    seed_labels.columns.get_level_values('coords')
-                ], names=['scorer', 'bodyparts', 'coords'])
             
-            # append pseudo labels to hand labels for this seed
-            seed_labels = pd.concat([seed_labels, subselected_preds])
+            seed_labels = update_seed_labels(seed_labels, subselected_preds)
 
         # Export the combined hand labels and pseudo labels for this seed
         combined_csv_filename = f"CollectedData_hand={cfg['n_hand_labels']}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
@@ -384,6 +245,13 @@ def pipeline(config_file: str):
         )
         os.makedirs(results_dir, exist_ok=True)
 
+        csv_prefix = (
+            f"hand={cfg['n_hand_label']}_rng={k}_"
+            f"pseudo={n_pseudo_labels or cfg['n_pseudo_labels']}_"
+            f"{pseudo_labeler or cfg['pseudo_labeler']}_{cfg['selection_strategy']}_"
+            f"rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
+        )
+
         # Run train_and_infer with the combined hand labels and pseudo labels
         train_and_infer(
             cfg=cfg.copy(),
@@ -391,17 +259,7 @@ def pipeline(config_file: str):
             k=k,
             data_dir=data_dir,
             results_dir=results_dir,
-            min_steps=cfg["min_steps"],
-            max_steps=cfg["max_steps"],
-            milestone_steps=cfg["milestone_steps"],
-            val_check_interval=cfg["val_check_interval"],
-            video_directories=cfg["video_directories"],
-            inference_csv_detailed_naming=True,
-            n_pseudo_labels=cfg['n_pseudo_labels'],
-            pseudo_labeler=cfg['pseudo_labeler'],
-            selection_strategy=cfg['selection_strategy'],
-            ensemble_seed_start=cfg['ensemble_seeds'][0],
-            ensemble_seed_end=cfg['ensemble_seeds'][-1],
+            csv_prefix=csv_prefix,
             new_labels_csv=combined_csv_path  # Use the combined CSV file for this seed
         )
 

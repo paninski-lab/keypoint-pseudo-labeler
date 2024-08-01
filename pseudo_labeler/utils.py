@@ -7,6 +7,31 @@ from eks.core import jax_ensemble, eks_zscore
 from eks.singlecam_smoother import adjust_observations, ensemble_kalman_smoother_singlecam
 
 
+def load_cfgs(config_file: str):
+    # Load pipeline config file
+    with open(config_file, "r") as file:
+        cfg = yaml.safe_load(file)
+        
+    # Load lightning pose config file from the path specified in pipeline config
+    lightning_pose_config_path = cfg.get("lightning_pose_config")
+    with open(lightning_pose_config_path, "r") as file:
+        lightning_pose_cfg = yaml.safe_load(file)
+    
+    cfg_lp = DictConfig(lightning_pose_cfg)
+    return cfg, cfg_lp
+
+def find_video_names(data_dir: str, video_directories: list[str]):
+    num_videos = 0
+    video_names = []
+    for video_dir in cfg["video_directories"]:
+            video_files = os.listdir(os.path.join(data_dir, video_dir))
+            num_videos += len(video_files)
+            for video_file in video_files:
+                if video_file not in video_names:
+                    video_names.append(video_file)
+    return num_videos, video_names
+    
+
 def format_data_walk(input_dir, data_type, video_name):
     input_dfs_list = []
     keypoint_names = None  # Initialize as None to ensure it's defined correctly later
