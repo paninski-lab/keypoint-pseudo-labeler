@@ -10,10 +10,6 @@ pipeline_seeds: 0
 # initial ensemble seeds
 ensemble_seeds:
   - 0
-  - 1
-  - 2
-  - 3
-  - 4
 
 video_directories:
   - videos_test
@@ -35,17 +31,17 @@ selection_strategy: random
 # datasetname:
 
 # training parameters
-#min_steps: 20
-#max_steps: 20
-#milestone_steps: [4, 8, 12]
-#val_check_interval: 10
-#train_check_interval: 10
-
-min_steps: 30000
-max_steps: 30000
-milestone_steps: [15000, 20000 , 25000]
-val_check_interval: 100 
+min_steps: 20
+max_steps: 20
+milestone_steps: [4, 8, 12]
+val_check_interval: 10
 train_check_interval: 10
+
+# min_steps: 30000
+# max_steps: 30000
+# milestone_steps: [15000, 20000 , 25000]
+# val_check_interval: 100 
+# train_check_interval: 10
 
 #min_steps: 5000
 #max_steps: 5000

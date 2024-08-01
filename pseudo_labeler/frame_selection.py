@@ -51,7 +51,6 @@ def select_frame_idxs_hand(
     return selected_rows
 
 
-
 def export_frames(
     video_file: str,
     save_dir: str,
@@ -136,4 +135,34 @@ def pick_n_hand_labels(cfg, cfg_lp, data_dir, outputs_dir):
     unsampled.to_csv(unsampled_path, index=False)
     print(f"Saved unsampled hand labels CSV file: {unsampled_path}")
     return subsample_path
+
+
+def process_predictions(preds_df, frame_idxs, base_name, standard_scorer_name='standard_scorer'):
+    mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
+    preds_df = preds_df.loc[:, mask]
+    subselected_preds = preds_df.iloc[frame_idxs]
+
+    def generate_new_index(idx, base_name):
+        return f"labeled-data/{base_name}/img{str(idx).zfill(8)}.png"
+
+    new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
+    subselected_preds.index = new_index
+
+    new_columns = pd.MultiIndex.from_arrays([
+        [standard_scorer_name] * len(subselected_preds.columns),
+        subselected_preds.columns.get_level_values('bodyparts'),
+        subselected_preds.columns.get_level_values('coords')
+    ], names=['scorer', 'bodyparts', 'coords'])
     
+    subselected_preds.columns = new_columns
+    return subselected_preds
+
+def update_seed_labels(seed_labels, new_preds, standard_scorer_name='standard_scorer'):
+    if not seed_labels.empty:
+        seed_labels.columns = pd.MultiIndex.from_arrays([
+            [standard_scorer_name] * len(seed_labels.columns),
+            seed_labels.columns.get_level_values('bodyparts'),
+            seed_labels.columns.get_level_values('coords')
+        ], names=['scorer', 'bodyparts', 'coords'])
+    seed_labels = pd.concat([seed_labels, new_preds])
+    return seed_labels

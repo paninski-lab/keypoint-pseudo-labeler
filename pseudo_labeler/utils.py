@@ -20,7 +20,7 @@ def load_cfgs(config_file: str):
     cfg_lp = DictConfig(lightning_pose_cfg)
     return cfg, cfg_lp
 
-def find_video_names(data_dir: str, video_directories: List[str]):
+def find_video_names(data_dir: str, video_directories: list[str]):
     num_videos = 0
     video_names = []
     for video_dir in cfg["video_directories"]:

@@ -448,3 +448,52 @@ def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth
         print(f'{post_processor_type}')
         preds_file = os.path.join(save_dir, f'{post_processor_type}', 'predictions_new.csv')
         compute_metrics(cfg=model_cfg, preds_file=preds_file, data_module=data_module)
+
+
+def run_ood_snippets(cfg: Dict, cfg_lp: Dict, data_dir: str, networks_dir: str, pp_dir: str, pseudo_labeler: str):
+    """
+    Runs the full pipeline for Out-of-Distribution (OOD) snippets, including inference, EKS, prediction collection,
+    ensemble computation, and metric computation.
+
+    Args:
+    - cfg (dict): Configuration dictionary containing necessary parameters.
+    - cfg_lp (dict): Configuration dictionary containing necessary parameters.
+    - data_dir (str): Directory containing the data.
+    - networks_dir (str): Directory containing network models.
+    - pp_dir (str): Directory for storing preprocessed data.
+    - pseudo_labeler (str): The labeler used for pseudo-labeling.
+    """
+
+    # Extract necessary configuration values
+    dataset_name = os.path.basename(cfg_lp.data.data_dir)
+    n_hand_labels = cfg["n_hand_labels"]
+    n_pseudo_labels = cfg["n_pseudo_labels"]
+    seeds = cfg["ensemble_seeds"]
+    keypoint_names = cfg_lp.data.keypoint_names
+
+    # Setting directories
+    snippets_dir = f"{data_dir}/videos-for-each-labeled-frame"
+    pp_ood_dir = os.path.join(pp_dir, f"{pseudo_labeler}_ood_snippets")
+    config_dir = "/teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/"
+    ground_truth_csv = 'CollectedData_new.csv'
+
+    # Find model directories
+    model_dirs_list = find_model_dirs(networks_dir, 'rng')
+    print(f"Found {len(model_dirs_list)} network model directories")
+
+    # Step 1: Run inference on video snippets
+    ground_truth_df = pd.read_csv(os.path.join(data_dir, ground_truth_csv), skiprows=2)
+    run_inference_on_snippets(model_dirs_list, data_dir, snippets_dir, ground_truth_df)
+
+    # Step 2: Run EKS
+    df_eks, dfs_markers = run_eks_on_snippets(snippets_dir, model_dirs_list, pp_dir, ground_truth_df, keypoint_names)
+
+    # Step 3.1: Collect preds from individual models
+    collect_preds(model_dirs_list, snippets_dir)
+
+    # Step 3.2: Compute ensemble mean and median
+    compute_ens_mean_median(model_dirs_list, pp_ood_dir, 'ens-mean')
+    compute_ens_mean_median(model_dirs_list, pp_ood_dir, 'ens-median')
+
+    # Step 4: Compute metrics
+    compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, pp_ood_dir)
