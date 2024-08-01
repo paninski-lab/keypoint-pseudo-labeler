@@ -134,19 +134,20 @@ def pick_n_hand_labels(cfg, cfg_lp, data_dir, outputs_dir):
     unsampled = collected_data.drop(index=initial_indices)
     unsampled.to_csv(unsampled_path, index=False)
     print(f"Saved unsampled hand labels CSV file: {unsampled_path}")
-    return subsample_path
+    return subsample_path, unsampled_path
 
 
-def process_predictions(preds_df, frame_idxs, base_name, standard_scorer_name='standard_scorer'):
+def process_predictions(preds_df, frame_idxs, base_name, standard_scorer_name='standard_scorer', generate_index=False):
     mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
     preds_df = preds_df.loc[:, mask]
     subselected_preds = preds_df.iloc[frame_idxs]
 
-    def generate_new_index(idx, base_name):
-        return f"labeled-data/{base_name}/img{str(idx).zfill(8)}.png"
+    if generate_index:
+        def generate_new_index(idx, base_name):
+            return f"labeled-data/{base_name}/img{str(idx).zfill(8)}.png"
 
-    new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
-    subselected_preds.index = new_index
+        new_index = [generate_new_index(idx, base_name) for idx in subselected_preds.index]
+        subselected_preds.index = new_index
 
     new_columns = pd.MultiIndex.from_arrays([
         [standard_scorer_name] * len(subselected_preds.columns),

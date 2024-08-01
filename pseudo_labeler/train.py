@@ -86,7 +86,15 @@ def get_callbacks(
     return callbacks
 
 
-def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, milestone_steps: List[int], val_check_interval: int) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
+def train(
+    cfg: DictConfig,
+    results_dir: str,
+    min_steps: int,
+    max_steps: int,
+    milestone_steps: List[int],
+    val_check_interval: int,
+    n_train_frames: Optional[int] = None    
+) -> Tuple[str, pl.LightningDataModule, pl.Trainer]:
 
     MIN_STEPS = min_steps
     MAX_STEPS = max_steps
@@ -126,6 +134,9 @@ def train(cfg: DictConfig, results_dir: str, min_steps: int, max_steps: int, mil
     data_module.setup()
 
     num_train_frames = len(data_module.train_dataset)
+    if n_train_frames:
+        num_train_frames = n_train_frames
+    
 
     step_per_epoch = num_train_frames / cfg.training.train_batch_size
 
@@ -363,7 +374,8 @@ def train_and_infer(
     data_dir: str,
     results_dir: str,
     csv_prefix: Optional[str] = None,
-    new_labels_csv: Optional[str] = None
+    new_labels_csv: Optional[str] = None,
+    n_train_frames: Optional[int] = None
 ) -> None:
 
     # Parse params from config
@@ -410,7 +422,8 @@ def train_and_infer(
             min_steps=min_steps,
             max_steps=max_steps,
             milestone_steps=milestone_steps,
-            val_check_interval=val_check_interval
+            val_check_interval=val_check_interval,
+            n_train_frames=n_train_frames
         )
     
     # Run inference on all InD/OOD videos and compute unsupervised metrics

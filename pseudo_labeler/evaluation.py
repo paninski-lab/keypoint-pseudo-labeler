@@ -619,7 +619,7 @@ def cleanaxis(ax):
     ax.tick_params(right=False)
 
 
-def run_ood_snippets(cfg: Dict, cfg_lp: Dict, data_dir: str, networks_dir: str, pp_dir: str, pseudo_labeler: str):
+def run_ood_pipeline(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, pp_dir: str, pseudo_labeler: str):
     """
     Runs the full pipeline for Out-of-Distribution (OOD) snippets, including inference, EKS, prediction collection,
     ensemble computation, and metric computation.

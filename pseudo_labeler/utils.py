@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
+import yaml
+from omegaconf import DictConfig
 
 from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe, make_dlc_pandas_index, format_data, populate_output_dataframe
 from eks.core import jax_ensemble, eks_zscore
@@ -23,7 +25,7 @@ def load_cfgs(config_file: str):
 def find_video_names(data_dir: str, video_directories: list[str]):
     num_videos = 0
     video_names = []
-    for video_dir in cfg["video_directories"]:
+    for video_dir in video_directories:
             video_files = os.listdir(os.path.join(data_dir, video_dir))
             num_videos += len(video_files)
             for video_file in video_files:

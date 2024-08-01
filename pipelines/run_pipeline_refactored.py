@@ -47,7 +47,7 @@ def pipeline(config_file: str):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
     outputs_dir = os.path.join(parent_dir, (
-        f'../outputs/{os.path.basename(data_dir)}'
+        f'../outputs/{os.path.basename(data_dir)}/'
         f'hand={cfg["n_hand_labels"]}_pseudo={cfg["n_pseudo_labels"]}'
         ))
     networks_dir = os.path.join(outputs_dir, 'networks')
@@ -66,7 +66,7 @@ def pipeline(config_file: str):
     # -------------------------------------------------------------------------------------  
 
     # Pick n hand labels. Make two csvs: one with the labels, one with the leftovers
-    subsample_path = pick_n_hand_labels(cfg, cfg_lp, data_dir, outputs_dir)
+    subsample_path, unsampled_path = pick_n_hand_labels(cfg, cfg_lp, data_dir, outputs_dir)
 
     # ||| Main first-round training loop |||
     # loops over ensemble seeds training a model for each seed with n hand_labels
@@ -93,15 +93,14 @@ def pipeline(config_file: str):
     # Collect input csv names from video names; skip existing ones
     input_csv_names = []
     for video_name in video_names:
-        csv_name = video_file.replace(".mp4", ".csv")
-        csv_path = os.path.join(pp_dir, video_name)
+        csv_name = video_name.replace(".mp4", ".csv")
+        csv_path = os.path.join(pp_dir, csv_name)
         if os.path.exists(csv_path):
-            print(f"{csv_path} already exists. Skipping post-processing.")
+            print(f"Post-processed output for {os.path.basename(csv_path)} already exists. Skipping.")
         else:
             input_csv_names.append(csv_name)
     
     print(f'Post-processing the following videos using {pseudo_labeler}: {input_csv_names}')
-
     # ||| Main EKS function call ||| pipeline_eks will also handle ensemble_mean baseline
     if pseudo_labeler == "eks" or pseudo_labeler == "ensemble_mean":
         pipeline_eks(input_csv_names, networks_dir, cfg["data_type"], pseudo_labeler, cfg_lp, pp_dir)
@@ -110,7 +109,7 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
     # # run inference on OOD snippets (if specified) -- using network models
     # # -------------------------------------------------------------------------------------
-
+    dataset_name = os.path.basename(data_dir)
     if cfg["ood_snippets"]:
         print(f'Starting OOD snippet analysis for {dataset_name}')
         run_ood_pipeline(
@@ -195,8 +194,7 @@ def pipeline(config_file: str):
                     )
                     
                     preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
-                    subselected_preds = process_predictions(preds_df, frame_idxs, base_name)
-                    print(f'adjusted: {subselected_preds}')
+                    subselected_preds = process_predictions(preds_df, frame_idxs, base_name, generate_index=True)
 
                     seed_labels = update_seed_labels(seed_labels, subselected_preds)
 
@@ -212,8 +210,7 @@ def pipeline(config_file: str):
             
             preds_df = pd.read_csv(preds_csv_path, header=[0,1,2], index_col=0)
             base_name = os.path.splitext(os.path.basename(preds_csv_path))[0]
-            subselected_preds = process_predictions(preds_df, frame_idxs, base_name)
-            print(f'adjusted: {subselected_preds}')
+            subselected_preds = process_predictions(preds_df, frame_idxs, base_name, generate_index=False)
             
             seed_labels = update_seed_labels(seed_labels, subselected_preds)
 
@@ -225,6 +222,7 @@ def pipeline(config_file: str):
 
         # Check number of labels for this seed
         expected_total_labels = cfg['n_hand_labels'] + cfg["n_pseudo_labels"]
+        n_train_frames = seed_labels.shape[0]
         if seed_labels.shape[0] != expected_total_labels:
             print(f"Warning: Number of labels for seed {k} ({seed_labels.shape[0]}) does not match expected count ({expected_total_labels})")
         else:
@@ -246,9 +244,9 @@ def pipeline(config_file: str):
         os.makedirs(results_dir, exist_ok=True)
 
         csv_prefix = (
-            f"hand={cfg['n_hand_label']}_rng={k}_"
-            f"pseudo={n_pseudo_labels or cfg['n_pseudo_labels']}_"
-            f"{pseudo_labeler or cfg['pseudo_labeler']}_{cfg['selection_strategy']}_"
+            f"hand={cfg['n_hand_labels']}_rng={k}_"
+            f"pseudo={cfg['n_pseudo_labels']}_"
+            f"{cfg['pseudo_labeler']}_{cfg['selection_strategy']}_"
             f"rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
         )
 
@@ -260,7 +258,8 @@ def pipeline(config_file: str):
             data_dir=data_dir,
             results_dir=results_dir,
             csv_prefix=csv_prefix,
-            new_labels_csv=combined_csv_path  # Use the combined CSV file for this seed
+            new_labels_csv=combined_csv_path,  # Use the combined CSV file for this seed
+            n_train_frames=n_train_frames
         )
 
         print(f"Completed training and inference for seed {k} using combined hand labels and pseudo labels")
@@ -308,7 +307,9 @@ def pipeline(config_file: str):
     # # -------------------------------------------------------------------------------------
     # # run inference on OOD snippets (if specified) -- using network models
     # # -------------------------------------------------------------------------------------
-
+    n_hand_labels = cfg['n_hand_labels']
+    n_pseudo_labels = cfg['n_pseudo_labels']
+    seeds = cfg['ensemble_seeds']
     # where the aeks models are stored
     aeks_dir = (
         f"/teamspace/studios/this_studio/outputs/{dataset_name}/"
