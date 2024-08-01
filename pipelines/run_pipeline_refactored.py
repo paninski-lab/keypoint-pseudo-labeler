@@ -153,10 +153,12 @@ def pipeline(config_file: str):
                 f"pseudo={cfg['n_pseudo_labels']}/results_aeks_{cfg['selection_strategy']}/rng{k}"
             )
         )
-        if os.path.exists(results_dir):
-            print(f'Path for {results_dir} already exists. Skipping frame selection.')
-            continue
+        combined_csv_filename = f"CollectedData_hand={cfg['n_hand_labels']}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
+        combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
+        #if os.path.exists(combined_csv_path):
+        #    print(f'Selected frames already exist at {combined_csv_path}. Skipping frame selection for rng{k}.')
 
+        #else:
         print(f'Using a {selection_strategy} pseudo-label selection strategy.')
 
         if selection_strategy == 'random':
@@ -215,14 +217,11 @@ def pipeline(config_file: str):
             seed_labels = update_seed_labels(seed_labels, subselected_preds)
 
         # Export the combined hand labels and pseudo labels for this seed
-        combined_csv_filename = f"CollectedData_hand={cfg['n_hand_labels']}_pseudo={cfg['n_pseudo_labels']}_k={k}.csv"
-        combined_csv_path = os.path.join(hand_label_and_pseudo_label_dir, combined_csv_filename)
         seed_labels.to_csv(combined_csv_path)
         print(f"Saved combined hand labels and pseudo labels for seed {k} to {combined_csv_path}")
 
         # Check number of labels for this seed
         expected_total_labels = cfg['n_hand_labels'] + cfg["n_pseudo_labels"]
-        n_train_frames = seed_labels.shape[0]
         if seed_labels.shape[0] != expected_total_labels:
             print(f"Warning: Number of labels for seed {k} ({seed_labels.shape[0]}) does not match expected count ({expected_total_labels})")
         else:
@@ -259,7 +258,7 @@ def pipeline(config_file: str):
             results_dir=results_dir,
             csv_prefix=csv_prefix,
             new_labels_csv=combined_csv_path,  # Use the combined CSV file for this seed
-            n_train_frames=n_train_frames
+            n_train_frames=expected_total_labels
         )
 
         print(f"Completed training and inference for seed {k} using combined hand labels and pseudo labels")

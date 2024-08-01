@@ -99,6 +99,7 @@ def train(
     MIN_STEPS = min_steps
     MAX_STEPS = max_steps
     MILESTONE_STEPS = milestone_steps
+    cfg.training.train_frames = n_train_frames
 
     # mimic hydra, change dir into results dir
     pwd = os.getcwd()
@@ -139,6 +140,7 @@ def train(
     
 
     step_per_epoch = num_train_frames / cfg.training.train_batch_size
+    print(f'step_per_epoch={step_per_epoch}')
 
     cfg.training.max_epochs = int(MAX_STEPS / step_per_epoch)
     cfg.training.min_epochs = int(MIN_STEPS / step_per_epoch)

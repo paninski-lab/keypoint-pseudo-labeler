@@ -24,7 +24,7 @@ pseudo_labeler: eks
 # options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
-selection_strategy: random
+selection_strategy: hand
 # options: random, hand
 
 # datasetname:
@@ -33,8 +33,8 @@ selection_strategy: random
 min_steps: 20
 max_steps: 20
 milestone_steps: [4, 8, 12]
-val_check_interval: 10
-train_check_interval: 10
+val_check_interval: 2
+train_check_interval: 2
 
 # min_steps: 30000
 # max_steps: 30000
