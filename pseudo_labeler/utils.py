@@ -190,3 +190,15 @@ def pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, 
             output_df.to_csv(output_path)
 
         print(f"{pseudo_labeler} DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
+
+
+def collect_missing_eks_csv_paths(video_names: list[str], eks_dir: str) -> list[str]:
+    input_csv_names = []
+    for video_name in video_names:
+        csv_name = video_name.replace(".mp4", ".csv")
+        csv_path = os.path.join(eks_dir, csv_name)
+        if os.path.exists(csv_path):
+            print(f"Post-processed output for {os.path.basename(csv_path)} already exists. Skipping.")
+        else:
+            input_csv_names.append(csv_name)
+    return input_csv_names

@@ -433,12 +433,7 @@ def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
     df_final.to_csv(results_file)
 
 
-def compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, save_dir):
-    # Load and prepare the configuration
-    cfg_file = os.path.join(config_dir, f"config_{dataset_name}.yaml")
-    cfg = DictConfig(yaml.safe_load(open(cfg_file)))
-    
-    model_cfg = cfg.copy()
+def compute_ood_snippet_metrics(cfg, dataset_name, data_dir, ground_truth_csv, model_dirs_list, save_dir):
     model_cfg.data.data_dir = data_dir
     model_cfg.data.csv_file = ground_truth_csv
     model_cfg.training.imgaug = "default"
@@ -619,9 +614,9 @@ def cleanaxis(ax):
     ax.tick_params(right=False)
 
 
-def run_ood_pipeline(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, pp_dir: str, pseudo_labeler: str):
+def pipeline_ood_snippets(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, pp_dir: str, pseudo_labeler: str):
     """
-    Runs the full pipeline for Out-of-Distribution (OOD) snippets, including inference, EKS, prediction collection,
+    Sub-pipeline for Out-of-Distribution (OOD) snippets. Runs inference, EKS, prediction collection,
     ensemble computation, and metric computation.
 
     Args:
@@ -629,7 +624,7 @@ def run_ood_pipeline(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, 
     - cfg_lp (dict): Configuration dictionary containing necessary parameters.
     - data_dir (str): Directory containing the data.
     - networks_dir (str): Directory containing network models.
-    - pp_dir (str): Directory for storing preprocessed data.
+    - pp_dir (str): Directory for EKS output.
     - pseudo_labeler (str): The labeler used for pseudo-labeling.
     """
 
@@ -643,7 +638,6 @@ def run_ood_pipeline(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, 
     # Setting directories
     snippets_dir = f"{data_dir}/videos-for-each-labeled-frame"
     pp_ood_dir = os.path.join(pp_dir, f"{pseudo_labeler}_ood_snippets")
-    config_dir = "/teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/"
     ground_truth_csv = 'CollectedData_new.csv'
 
     # Find model directories
@@ -665,4 +659,4 @@ def run_ood_pipeline(cfg: dict, cfg_lp: dict, data_dir: str, networks_dir: str, 
     compute_ens_mean_median(model_dirs_list, pp_ood_dir, 'ens-median')
 
     # Step 4: Compute metrics
-    compute_ood_snippet_metrics(config_dir, dataset_name, data_dir, ground_truth_csv, model_dirs_list, pp_ood_dir)
+    compute_ood_snippet_metrics(cfg_lp.copy(), dataset_name, data_dir, ground_truth_csv, model_dirs_list, pp_ood_dir)

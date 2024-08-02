@@ -1,7 +1,7 @@
 """Function to select pseudo-labeled frames."""
 
 import os
-
+from typing import List, Dict, Any
 import cv2
 import numpy as np
 import pandas as pd
@@ -23,32 +23,79 @@ def get_total_frames(video_file: str) -> int:
 # --------------------------
 # Frame selection functions:
 # --------------------------
-def select_frame_idxs_random(
-    video_file: str,
-    n_frames_to_select: int,
-    seed: int
-) -> np.ndarray:
-    total_frames = get_total_frames(video_file)
-    np.random.seed(seed)
-    return np.random.choice(total_frames, n_frames_to_select, replace=False)
+def select_frames_random(
+    cfg: Dict[str, Any], k: int, data_dir: str, num_videos: int, pp_dir: str, labeled_data_dir: str, seed_labels: Dict[str, Any]
+) -> Dict[str, Any]:
+    video_directories = cfg["video_directories"]
+    n_pseudo_labels = cfg["n_pseudo_labels"]
+    
+    frames_per_video = int(n_pseudo_labels / num_videos)
+    print(f"Frames per video: {frames_per_video}")
 
-def select_frame_idxs_hand(
-    hand_labels_csv: str,
-    n_frames_to_select: int,
-    seed: int
-) -> np.ndarray:
+    for video_dir in video_directories:
+        video_files = os.listdir(os.path.join(data_dir, video_dir))
+        for video_file in video_files:
+            video_path = os.path.join(data_dir, video_dir, video_file)
+            
+            # Get total number of frames in the video
+            total_frames = get_total_frames(video_path)
+            
+            # Select random frame indices
+            np.random.seed(k)
+            frame_idxs = np.random.choice(total_frames, frames_per_video, replace=False)
+            
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            csv_filename = base_name + ".csv"
+            preds_csv_path = os.path.join(pp_dir, csv_filename)
+            frame_idxs = frame_idxs.astype(int)
+            print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
+            
+            export_frames(
+                video_file=video_path,
+                save_dir=os.path.join(labeled_data_dir, base_name),
+                frame_idxs=frame_idxs,
+                format="png",
+                n_digits=8,
+                context_frames=0,
+            )
+            
+            preds_df = pd.read_csv(preds_csv_path, header=[0, 1, 2], index_col=0)
+            subselected_preds = process_predictions(preds_df, frame_idxs, base_name, generate_index=True)
+            
+            seed_labels = update_seed_labels(seed_labels, subselected_preds)
+    
+    return seed_labels
+
+
+def select_frames_hand(
+    unsampled_path: str, n_frames_to_select: int, k: int,
+    seed_labels: Dict[str, Any]
+) -> Dict[str, Any]:
     # Read the CSV file, skipping the first three rows
-    df = pd.read_csv(hand_labels_csv, skiprows=2)
+    df = pd.read_csv(unsampled_path, skiprows=2)
+    
     # Get the total number of rows (frames)
     total_rows = df.shape[0]
+    
     # If there are not enough rows, return all of the rows
     if total_rows <= n_frames_to_select:
-        return np.arange(total_rows)
-    # Set the random seed for reproducibility
-    np.random.seed(seed)
-    # Randomly select n_frames_to_select rows
-    selected_rows = np.random.choice(total_rows, n_frames_to_select, replace=False)
-    return selected_rows
+        frame_idxs = np.arange(total_rows)
+    else:
+        # Set the random seed for reproducibility
+        np.random.seed(k)
+        # Randomly select n_frames_to_select rows
+        frame_idxs = np.random.choice(total_rows, n_frames_to_select, replace=False)
+    
+    frame_idxs = frame_idxs.astype(int)
+    print(f'Selected frame indices (displaying first 10 of {len(frame_idxs)}): {frame_idxs[0:10]}...')
+    
+    preds_csv_path = unsampled_path
+    preds_df = pd.read_csv(preds_csv_path, header=[0, 1, 2], index_col=0)
+    base_name = os.path.splitext(os.path.basename(preds_csv_path))[0]
+    subselected_preds = process_predictions(preds_df, frame_idxs, base_name, generate_index=False)
+    
+    updated_seed_labels = update_seed_labels(seed_labels, subselected_preds)
+    return updated_seed_labels
 
 
 def export_frames(
