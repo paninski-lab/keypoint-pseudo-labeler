@@ -14,6 +14,7 @@ ensemble_seeds:
 video_directories:
   - videos_test
   - videos_test_new
+  - videos
   # - videos_new
 # number of pseudo-labels to select for next round of training
 n_hand_labels: 100

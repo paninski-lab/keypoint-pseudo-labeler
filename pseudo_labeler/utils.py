@@ -1,38 +1,45 @@
 import os
-import pandas as pd
-import numpy as np
-import yaml
-from omegaconf import DictConfig
 
-from eks.utils import convert_slp_dlc, convert_lp_dlc, make_output_dataframe, make_dlc_pandas_index, format_data, populate_output_dataframe
-from eks.core import jax_ensemble, eks_zscore
-from eks.singlecam_smoother import adjust_observations, ensemble_kalman_smoother_singlecam
+import numpy as np
+import pandas as pd
+import yaml
+from eks.core import eks_zscore, jax_ensemble
+from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
+from eks.utils import (
+    convert_lp_dlc,
+    convert_slp_dlc,
+    make_dlc_pandas_index,
+    make_output_dataframe,
+    populate_output_dataframe,
+)
+from omegaconf import DictConfig
 
 
 def load_cfgs(config_file: str):
     # Load pipeline config file
     with open(config_file, "r") as file:
         cfg = yaml.safe_load(file)
-        
+
     # Load lightning pose config file from the path specified in pipeline config
     lightning_pose_config_path = cfg.get("lightning_pose_config")
     with open(lightning_pose_config_path, "r") as file:
         lightning_pose_cfg = yaml.safe_load(file)
-    
+
     cfg_lp = DictConfig(lightning_pose_cfg)
     return cfg, cfg_lp
+
 
 def find_video_names(data_dir: str, video_directories: list[str]):
     num_videos = 0
     video_names = []
     for video_dir in video_directories:
-            video_files = os.listdir(os.path.join(data_dir, video_dir))
-            num_videos += len(video_files)
-            for video_file in video_files:
-                if video_file not in video_names:
-                    video_names.append(video_file)
+        video_files = os.listdir(os.path.join(data_dir, video_dir))
+        num_videos += len(video_files)
+        for video_file in video_files:
+            if video_file not in video_names:
+                video_names.append(video_file)
     return num_videos, video_names
-    
+
 
 def format_data_walk(input_dir, data_type, video_name):
     input_dfs_list = []
@@ -45,17 +52,21 @@ def format_data_walk(input_dir, data_type, video_name):
             for input_file in files:
                 if video_name in input_file:
                     file_path = os.path.join(root, input_file)
-
                     if data_type == 'slp':
                         markers_curr = convert_slp_dlc(root, input_file)
-                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if not c[1].startswith('Unnamed')]
+                        keypoint_names = \
+                            [c[1] for c in markers_curr.columns[::3] if not c[1].startswith(
+                                'Unnamed')]
                         markers_curr_fmt = markers_curr
                     elif data_type in ['lp', 'dlc']:
                         markers_curr = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
-                        keypoint_names = [c[1] for c in markers_curr.columns[::3] if not c[1].startswith('Unnamed')]
+                        keypoint_names = \
+                            [c[1] for c in markers_curr.columns[::3] if not c[1].startswith(
+                                'Unnamed')]
                         model_name = markers_curr.columns[0][0]
                         if data_type == 'lp':
-                            markers_curr_fmt = convert_lp_dlc(markers_curr, keypoint_names, model_name=model_name)
+                            markers_curr_fmt = convert_lp_dlc(
+                                markers_curr, keypoint_names, model_name=model_name)
                         else:
                             markers_curr_fmt = markers_curr
 
@@ -76,7 +87,12 @@ def format_data_walk(input_dir, data_type, video_name):
     return input_dfs_list, output_df, keypoint_names
 
 
-def ensemble_only_singlecam(markers_3d_array, bodypart_list, ensembling_mode='median', zscore_threshold=2):
+def ensemble_only_singlecam(
+    markers_3d_array: np.ndarray,
+    bodypart_list: list,
+    ensembling_mode: str = 'median',
+    zscore_threshold: float = 2
+) -> list:
     """
     Perform ensembling on 3D marker data from a single camera.
 
@@ -110,9 +126,10 @@ def ensemble_only_singlecam(markers_3d_array, bodypart_list, ensembling_mode='me
                             min_ensemble_std=zscore_threshold)
 
         # Final Cleanup
-        pdindex = make_dlc_pandas_index([bodypart_list[k]],
-                                        labels=["x", "y", "likelihood", "x_var", "y_var", "zscore"])
-        
+        pdindex = make_dlc_pandas_index(
+            [bodypart_list[k]],
+            labels=["x", "y", "likelihood", "x_var", "y_var", "zscore"])
+
         # Extract predictions and variances
         x_vals = ensemble_preds[:, k, 0]
         y_vals = ensemble_preds[:, k, 1]
@@ -135,10 +152,11 @@ def ensemble_only_singlecam(markers_3d_array, bodypart_list, ensembling_mode='me
     return df_dicts
 
 
-def pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, results_dir):
+def pipeline_eks(input_csv_names: list, input_dir: str, data_type: str,
+                 pseudo_labeler: str, cfg_lp: dict, results_dir: str) -> None:
     bodypart_list = cfg_lp["data"]["keypoint_names"]
     s = None  # optimize s
-    s_frames = [(None, None)] # use all frames for optimization
+    s_frames = [(None, None)]  # use all frames for optimization
     output_df = None
     print(input_csv_names)
 
@@ -189,7 +207,8 @@ def pipeline_eks(input_csv_names, input_dir, data_type, pseudo_labeler, cfg_lp, 
             output_path = os.path.join(results_dir, csv_name)
             output_df.to_csv(output_path)
 
-        print(f"{pseudo_labeler} DataFrame output for {csv_name} successfully converted to CSV. See at {output_path}")
+        print(f"{pseudo_labeler} DataFrame output for {csv_name} successfully converted to CSV."
+              f" See at {output_path}")
 
 
 def collect_missing_eks_csv_paths(video_names: list[str], eks_dir: str) -> list[str]:
@@ -198,7 +217,8 @@ def collect_missing_eks_csv_paths(video_names: list[str], eks_dir: str) -> list[
         csv_name = video_name.replace(".mp4", ".csv")
         csv_path = os.path.join(eks_dir, csv_name)
         if os.path.exists(csv_path):
-            print(f"Post-processed output for {os.path.basename(csv_path)} already exists. Skipping.")
+            print(f"Post-processed output for {os.path.basename(csv_path)} already exists."
+                  f" Skipping.")
         else:
             input_csv_names.append(csv_name)
     return input_csv_names

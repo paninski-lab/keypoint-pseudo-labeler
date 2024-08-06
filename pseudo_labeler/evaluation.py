@@ -9,9 +9,6 @@ import numpy as np
 import pandas as pd
 import torch
 import yaml
-from omegaconf import DictConfig
-from tqdm import tqdm
-
 from eks.core import jax_ensemble
 from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
 from eks.utils import convert_lp_dlc, make_output_dataframe, populate_output_dataframe
@@ -28,6 +25,8 @@ from lightning_pose.utils.scripts import (
     get_dataset,
     get_imgaug_transform,
 )
+from omegaconf import DictConfig
+from tqdm import tqdm
 
 
 def compute_likelihoods_and_variance(input_dfs, likelihood_thresh=0.9):
