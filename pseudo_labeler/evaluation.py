@@ -462,7 +462,7 @@ def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
     df_final.to_csv(results_file)
 
 
-def compute_ood_snippet_metrics(cfg: dict,
+def compute_ood_snippet_metrics(model_cfg: dict,
                                 dataset_name: str,
                                 data_dir: str,
                                 ground_truth_csv: str,
@@ -696,7 +696,7 @@ def pipeline_ood_snippets(
 
     # Step 2: Run EKS
     df_eks, dfs_markers = run_eks_on_snippets(
-        snippets_dir, model_dirs_list, pp_dir, ground_truth_df, keypoint_names)
+        snippets_dir, model_dirs_list, pp_ood_dir, ground_truth_df, keypoint_names)
 
     # Step 3.1: Collect preds from individual models
     collect_preds(model_dirs_list, snippets_dir)

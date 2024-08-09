@@ -52,4 +52,4 @@ train_check_interval: 10
 # Flags for specifying active pipeline sections
 
 # Includes OOD video snippet analysis
-ood_snippets: False
+ood_snippets: True
