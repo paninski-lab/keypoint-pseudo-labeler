@@ -1,5 +1,6 @@
 # absolute path to lp yaml file
 lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_mirror-mouse.yaml
+# lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
   
 # pose estimation data type
 data_type: lp
@@ -10,6 +11,10 @@ pipeline_seeds: 0
 # initial ensemble seeds
 ensemble_seeds:
   - 0
+  - 1
+  - 2
+  - 3
+  # - 4
 
 video_directories:
   - videos_test
@@ -25,16 +30,16 @@ pseudo_labeler: eks
 # options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
-selection_strategy: random
-# options: random, hand
+selection_strategy: frame_selection #random
+# options: random, hand, frame_selection
 
 # datasetname:
 
 # training parameters
-min_steps: 500
-max_steps: 500
-milestone_steps: [200, 300, 400]
-val_check_interval: 100
+min_steps: 5000
+max_steps: 5000
+milestone_steps: [2000, 3000, 4000]
+val_check_interval: 50
 train_check_interval: 10
 
 # min_steps: 30000
@@ -43,13 +48,15 @@ train_check_interval: 10
 # val_check_interval: 100 
 # train_check_interval: 10
 
-#min_steps: 5000
-#max_steps: 5000
-#milestone_steps: [2000, 3000 , 4000]
-#val_check_interval: 50
-#train_check_interval: 10
-
-# Flags for specifying active pipeline sections
+# min_steps: 200
+# max_steps: 200
+# milestone_steps: [2, 3 , 5]
+# val_check_interval: 2
+# train_check_interval: 2
 
 # Includes OOD video snippet analysis
-ood_snippets: True
+ood_snippets: False
+
+pixel_threshold: 5
+required_keypoint_percentage: 0.75
+n_clusters: 1000

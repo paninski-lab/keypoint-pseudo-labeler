@@ -4,11 +4,7 @@ import os
 import pandas as pd
 
 from pseudo_labeler.evaluation import pipeline_ood_snippets
-from pseudo_labeler.frame_selection import (
-    pick_n_hand_labels,
-    select_frames_hand,
-    select_frames_random,
-)
+from pseudo_labeler.frame_selection import *
 from pseudo_labeler.train import train_and_infer
 from pseudo_labeler.utils import (
     collect_missing_eks_csv_paths,
@@ -26,10 +22,12 @@ def pipeline(config_file: str):
 
     # Load cfg (pipeline yaml) and cfg_lp (lp yaml)
     cfg, cfg_lp = load_cfgs(config_file)  # cfg_lp is a DictConfig, cfg is not
+    
 
     # Define + create directories
     data_dir = cfg_lp.data.data_dir
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    source_dir = os.path.dirname(os.path.dirname(script_dir))
     parent_dir = os.path.dirname(script_dir)
     labeled_data_dir = os.path.join(data_dir, "labeled-data")
     outputs_dir = os.path.join(parent_dir, (
@@ -47,6 +45,14 @@ def pipeline(config_file: str):
         outputs_dir,
         f"results_aeks_{cfg['selection_strategy']}"
     )
+
+    # frame_selection_path = os.path.join(source_dir, (
+    #     f"outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+    #     f"pseudo={cfg['n_pseudo_labels']}/post-quality-frame/"
+    # ))
+
+    # final_selected_frames_path = os.path.join(frame_selection_path, 'step_6_maskingNaN_file.csv')
+
     aeks_eks_dir = os.path.join(
         aeks_dir,
         f"{cfg['pseudo_labeler']}_rng={cfg['ensemble_seeds'][0]}-{cfg['ensemble_seeds'][-1]}"
@@ -168,14 +174,37 @@ def pipeline(config_file: str):
                     k=k,
                     seed_labels=seed_labels
                 )
+                
+            elif selection_strategy == 'frame_selection':
+                frame_selection_path = os.path.join(source_dir, (
+                    f"outputs/{os.path.basename(data_dir)}/hand={cfg_lp.training.train_frames}_"
+                    f"pseudo={cfg['n_pseudo_labels']}/post-quality-frame/"
+                ))
 
+                final_selected_frames_path = select_frames_strategy_pipeline(
+                    cfg=cfg.copy(),
+                    cfg_lp=cfg_lp.copy(),
+                    data_dir=data_dir,
+                    source_dir=source_dir,
+                    frame_selection_path=frame_selection_path
+                )
+
+                seed_labels = process_and_export_frame_selection(
+                    cfg=cfg.copy(),
+                    cfg_lp=cfg_lp.copy(),
+                    data_dir=data_dir,
+                    labeled_data_dir=labeled_data_dir,
+                    final_selected_frames_path=final_selected_frames_path,
+                    seed_labels=seed_labels
+                )
+            
             # Export the combined hand labels and pseudo labels for this seed
             seed_labels.to_csv(combined_csv_path)
             print(
                 f"Saved combined hand labels and pseudo labels for seed {k} to "
                 f"{combined_csv_path}"
             )
-
+            
         # Check number of labels for this seed
         expected_total_labels = cfg['n_hand_labels'] + cfg["n_pseudo_labels"]
         if seed_labels.shape[0] != expected_total_labels:
