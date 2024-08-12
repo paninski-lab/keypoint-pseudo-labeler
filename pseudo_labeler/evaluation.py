@@ -172,7 +172,7 @@ def find_model_dirs(base_dir, keyword):
     model_dirs = []
     for root, dirs, files in os.walk(base_dir):
         for dir_name in dirs:
-            if keyword in dir_name:
+            if keyword in dir_name and '=' not in dir_name:
                 model_dirs.append(os.path.join(root, dir_name))
     return model_dirs
 
@@ -462,11 +462,7 @@ def compute_ens_mean_median(model_dirs_list, eks_save_dir, post_processor_type):
     df_final.to_csv(results_file)
 
 
-<<<<<<< HEAD
 def compute_ood_snippet_metrics(model_cfg: dict,
-=======
-def compute_ood_snippet_metrics(cfg: dict,
->>>>>>> 15af09e6f8a0f8253e494077fe1aec15343a317a
                                 dataset_name: str,
                                 data_dir: str,
                                 ground_truth_csv: str,
@@ -700,11 +696,7 @@ def pipeline_ood_snippets(
 
     # Step 2: Run EKS
     df_eks, dfs_markers = run_eks_on_snippets(
-<<<<<<< HEAD
         snippets_dir, model_dirs_list, pp_ood_dir, ground_truth_df, keypoint_names)
-=======
-        snippets_dir, model_dirs_list, pp_dir, ground_truth_df, keypoint_names)
->>>>>>> 15af09e6f8a0f8253e494077fe1aec15343a317a
 
     # Step 3.1: Collect preds from individual models
     collect_preds(model_dirs_list, snippets_dir)
@@ -715,8 +707,4 @@ def pipeline_ood_snippets(
 
     # Step 4: Compute metrics
     compute_ood_snippet_metrics(
-<<<<<<< HEAD
         cfg_lp.copy(), dataset_name, data_dir, ground_truth_csv, model_dirs_list, pp_ood_dir)
-=======
-        cfg_lp.copy(), dataset_name, data_dir, ground_truth_csv, model_dirs_list, pp_ood_dir)
->>>>>>> 15af09e6f8a0f8253e494077fe1aec15343a317a

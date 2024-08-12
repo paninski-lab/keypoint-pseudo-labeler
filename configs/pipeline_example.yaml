@@ -1,5 +1,5 @@
 # absolute path to lp yaml file
-lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_mirror-mouse.yaml
+lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
 # lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
   
 # pose estimation data type
@@ -30,7 +30,7 @@ pseudo_labeler: eks
 # options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
-selection_strategy: frame_selection #random
+selection_strategy: hand #random
 # options: random, hand, frame_selection
 
 # datasetname:
@@ -55,7 +55,7 @@ train_check_interval: 10
 # train_check_interval: 2
 
 # Includes OOD video snippet analysis
-ood_snippets: False
+ood_snippets: True
 
 pixel_threshold: 5
 required_keypoint_percentage: 0.75
