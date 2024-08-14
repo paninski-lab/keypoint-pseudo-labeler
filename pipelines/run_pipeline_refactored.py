@@ -72,7 +72,7 @@ def pipeline(config_file: str):
     # Train k supervised models on n hand-labeled frames and compute labeled OOD metrics
     # -------------------------------------------------------------------------------------
 
-    # Pick n hand labels. Make two csvs: one with the labels, one with the leftovers
+    # # Pick n hand labels. Make two csvs: one with the labels, one with the leftovers
     subsample_path, unsampled_path = pick_n_hand_labels(
         cfg.copy(), cfg_lp.copy(), data_dir, outputs_dir)
 
