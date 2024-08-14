@@ -1,5 +1,5 @@
 # absolute path to lp yaml file
-lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
+lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_mirror-mouse.yaml
 # lightning_pose_config: /teamspace/studios/this_studio/keypoint-pseudo-labeler/configs/config_crim13.yaml
   
 # pose estimation data type
@@ -17,8 +17,8 @@ ensemble_seeds:
   # - 4
 
 video_directories:
-  - videos_test
-  - videos_test_new
+  # - videos_test
+  # - videos_test_new
   - videos
   # - videos_new
 # number of pseudo-labels to select for next round of training
@@ -30,7 +30,7 @@ pseudo_labeler: eks
 # options: eks, ensemble_mean
 
 # we pseudo-label all frames in all videos - how to select the final frames?
-selection_strategy: hand #random
+selection_strategy: frame_selection #random
 # options: random, hand, frame_selection
 
 # datasetname:

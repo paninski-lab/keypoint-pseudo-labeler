@@ -6,6 +6,7 @@ import csv
 from math import ceil
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple, Union
+import logging
 
 import cv2
 import numpy as np
@@ -154,6 +155,7 @@ def export_frames(
     # save out frames
     os.makedirs(save_dir, exist_ok=True)
     for frame, idx in zip(frames, frame_idxs):
+        #TODO: create file name check if the file name exists os.path.exist does it exist? if it doesn't exist then do the cv2.imwrite
         cv2.imwrite(
             filename=os.path.join(save_dir, "img%s.%s" % (str(idx).zfill(n_digits), format)),
             img=frame[0],
@@ -533,8 +535,31 @@ def run_kmeans_on_eks_output(
     cluster_labels = kmeans.fit_predict(embedding)
 
     centers = kmeans.cluster_centers_
-    distances = np.linalg.norm(embedding[:, None, :] - centers[None, :, :], axis=2)
-    prototype_indices = np.argmin(distances, axis=0)
+
+    # Initialize array to store minimum distances for each center
+    min_distances = np.full(centers.shape[0], np.inf)
+    prototype_indices = np.zeros(centers.shape[0], dtype=int)
+
+    batch_size = 1000
+    
+    # Process in batches to reduce memory load
+    for i in range(0, embedding.shape[0], batch_size):
+        end = min(i + batch_size, embedding.shape[0])
+        batch_distances = np.empty((end - i, centers.shape[0]))
+        for j in range(centers.shape[0]):
+            batch_distances[:, j] = np.linalg.norm(embedding[i:end] - centers[j], axis=1)
+        
+        # Update minimum distances and indices
+        batch_min_indices = np.argmin(batch_distances, axis=0)
+        batch_min_distances = np.min(batch_distances, axis=0)
+        update_mask = batch_min_distances < min_distances
+        min_distances[update_mask] = batch_min_distances[update_mask]
+        prototype_indices[update_mask] = batch_min_indices[update_mask] + i
+
+    # memory-intensive way
+    # distances = np.linalg.norm(embedding[:, None, :] - centers[None, :, :], axis=2)
+    # prototype_indices = np.argmin(distances, axis=0)
+    
     prototype_frames = eks_data.iloc[prototype_indices]
 
     return prototype_frames, header
@@ -677,6 +702,7 @@ def select_frames_strategy_pipeline(
     print("Frame selection strategy pipeline completed successfully.")
     return final_selected_frames_path
 
+
 def process_and_export_frame_selection(
     cfg: dict,
     cfg_lp: dict,
@@ -697,6 +723,38 @@ def process_and_export_frame_selection(
             seed_labels.columns.get_level_values('coords')
         ], names=['scorer', 'bodyparts', 'coords'])
 
+    # Prepare video paths
+    video_paths = {}
+    for video_dir in cfg["video_directories"]:
+        video_dir_path = os.path.join(data_dir, video_dir)
+        for video_file in os.listdir(video_dir_path):
+            if video_file.lower().endswith('.mp4'):
+                video_name = os.path.splitext(video_file)[0]
+                video_paths[video_name] = os.path.join(video_dir_path, video_file)
+
+    # Extract frames from selected_frames
+    frames_by_video = {}
+    for idx in selected_frames.index:
+        video_name, frame_number = idx.split('/')
+        frame_number = int(frame_number)
+        frames_by_video.setdefault(video_name, []).append(frame_number)
+
+    # Export frames
+    for video_name, frame_numbers in frames_by_video.items():
+        if video_name in video_paths:
+            export_frames(
+                video_file=video_paths[video_name],
+                save_dir=os.path.join(labeled_data_dir, video_name),
+                frame_idxs=np.array(frame_numbers),
+                format="png",
+                n_digits=8,  # This ensures 8-digit zero-padding
+                context_frames=0,
+            )
+        else:
+            print(f"Warning: Video file for {video_name} not found in the specified directories.")
+
+    # Now proceed with concatenation
+    new_rows = []
     for idx, row in selected_frames.iterrows():
         video_name, frame_number = idx.split('/')
         frame_number = int(frame_number)
@@ -708,34 +766,76 @@ def process_and_export_frame_selection(
             new_row.columns.get_level_values('bodyparts'),
             new_row.columns.get_level_values('coords')
         ], names=['scorer', 'bodyparts', 'coords'])
-        seed_labels = pd.concat([seed_labels, new_row])
+        new_rows.append(new_row)
 
-    video_paths = {}
-    for video_dir in cfg["video_directories"]:
-        video_dir_path = os.path.join(data_dir, video_dir)
-        for video_file in os.listdir(video_dir_path):
-            if video_file.lower().endswith('.mp4'):
-                video_name = os.path.splitext(video_file)[0]
-                video_paths[video_name] = os.path.join(video_dir_path, video_file)
-
-    frames_by_video = {}
-    for idx in seed_labels.index:
-        if idx.startswith("labeled-data/"):
-            video_name, frame_name = idx.split('/')[-2:]
-            frame_number = int(frame_name.split('.')[0][3:])
-            frames_by_video.setdefault(video_name, []).append(frame_number)
-
-    for video_name, frame_numbers in frames_by_video.items():
-        if video_name in video_paths:
-            export_frames(
-                video_file=video_paths[video_name],
-                save_dir=os.path.join(labeled_data_dir, video_name),
-                frame_idxs=np.array(frame_numbers),
-                format="png",
-                n_digits=8,
-                context_frames=0,
-            )
-        else:
-            print(f"Warning: Video file for {video_name} not found in the specified directories.")
+    # Concatenate all at once
+    new_labels = pd.concat(new_rows)
+    seed_labels = pd.concat([seed_labels, new_labels])
 
     return seed_labels
+
+    
+# def process_and_export_frame_selection(
+#     cfg: dict,
+#     cfg_lp: dict,
+#     data_dir: str,
+#     labeled_data_dir: str,
+#     final_selected_frames_path: str,
+#     seed_labels: pd.DataFrame
+# ) -> pd.DataFrame:
+#     """Process selected frames and export them."""
+#     selected_frames = pd.read_csv(final_selected_frames_path, header=[0,1,2], index_col=0)
+#     print(f"Reading data from {final_selected_frames_path}")
+    
+#     standard_scorer_name = 'standard_scorer'
+#     if not seed_labels.empty:
+#         seed_labels.columns = pd.MultiIndex.from_arrays([
+#             [standard_scorer_name] * len(seed_labels.columns),
+#             seed_labels.columns.get_level_values('bodyparts'),
+#             seed_labels.columns.get_level_values('coords')
+#         ], names=['scorer', 'bodyparts', 'coords'])
+
+#     for idx, row in selected_frames.iterrows():
+#         video_name, frame_number = idx.split('/')
+#         frame_number = int(frame_number)
+#         new_index = f"labeled-data/{video_name}/img{str(frame_number).zfill(8)}.png"
+#         new_row = pd.DataFrame(row).T
+#         new_row.index = [new_index]
+#         new_row.columns = pd.MultiIndex.from_arrays([
+#             [standard_scorer_name] * len(new_row.columns),
+#             new_row.columns.get_level_values('bodyparts'),
+#             new_row.columns.get_level_values('coords')
+#         ], names=['scorer', 'bodyparts', 'coords'])
+#         seed_labels = pd.concat([seed_labels, new_row])
+
+#     video_paths = {}
+#     for video_dir in cfg["video_directories"]:
+#         video_dir_path = os.path.join(data_dir, video_dir)
+#         for video_file in os.listdir(video_dir_path):
+#             if video_file.lower().endswith('.mp4'):
+#                 video_name = os.path.splitext(video_file)[0]
+#                 video_paths[video_name] = os.path.join(video_dir_path, video_file)
+
+#     frames_by_video = {}
+#     for idx in seed_labels.index:
+#         if idx.startswith("labeled-data/"):
+#             video_name, frame_name = idx.split('/')[-2:]
+#             frame_number = int(frame_name.split('.')[0][3:])
+#             frames_by_video.setdefault(video_name, []).append(frame_number)
+
+#     for video_name, frame_numbers in frames_by_video.items():
+#         if video_name in video_paths:
+#             export_frames(
+#                 video_file=video_paths[video_name],
+#                 save_dir=os.path.join(labeled_data_dir, video_name),
+#                 frame_idxs=np.array(frame_numbers),
+#                 format="png",
+#                 n_digits=8,
+#                 context_frames=0,
+#             )
+#         else:
+#             print(f"Warning: Video file for {video_name} not found in the specified directories.")
+
+#     return seed_labels
+
+
