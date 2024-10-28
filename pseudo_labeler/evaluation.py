@@ -576,7 +576,7 @@ def compute_ensemble_stddev(
         # Remove likelihood columns
         cols_to_keep = [
             col for col in df.columns
-            if not col[2].endswith('_likelihood') and 'zscore' not in col[2]]
+            if not col[2].endswith('likelihood') and 'zscore' not in col[2]]
         # Keep only columns matching the keypoint_ensemble_list
         cols_to_keep = [col for col in cols_to_keep if col[1] in keypoint_ensemble_list]
         df = df[cols_to_keep]

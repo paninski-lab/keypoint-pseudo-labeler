@@ -5,6 +5,7 @@ import pandas as pd
 import yaml
 from eks.core import eks_zscore, jax_ensemble
 from eks.singlecam_smoother import ensemble_kalman_smoother_singlecam
+from eks.ibl_pupil_smoother import ensemble_kalman_smoother_ibl_pupil
 from eks.utils import (
     convert_lp_dlc,
     convert_slp_dlc,
@@ -191,6 +192,15 @@ def pipeline_eks(input_csv_names: list, input_dir: str, data_type: str,
                 s,
                 s_frames,
                 blocks=[]
+            )
+
+        elif pseudo_labeler == "eks_pupil":
+            df_dicts, _, _ = ensemble_kalman_smoother_ibl_pupil(
+                markers_list=markers_3d_array,
+                keypoint_names=bodypart_list,
+                tracker_name='ensemble-kalman_tracker',
+                smooth_params=[0.999, 0.999],
+                s_frames=s_frames
             )
 
         elif pseudo_labeler == "ensemble_mean":

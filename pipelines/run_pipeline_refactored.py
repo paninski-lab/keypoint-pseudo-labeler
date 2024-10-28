@@ -186,7 +186,7 @@ def pipeline(config_file: str):
                     cfg_lp=cfg_lp.copy(),
                     data_dir=data_dir,
                     source_dir=source_dir,
-                    frame_selection_path=frame_selection_path
+                    frame_selection_path=frame_selection_path,
                 )
 
                 seed_labels = process_and_export_frame_selection(
@@ -198,8 +198,17 @@ def pipeline(config_file: str):
                     seed_labels=seed_labels
                 )
             
-            # Export the combined hand labels and pseudo labels for this seed
-            seed_labels.to_csv(combined_csv_path)
+            # Filter out columns where the second level of the header contains 'zscore', 'nll', or 'ensemble_std'
+            columns_to_keep = [
+                col for col in seed_labels.columns
+                if not any(substring in col[2] for substring in ['zscore', 'nll', 'ensemble_std'])
+            ]
+
+            # Select the columns to keep
+            seed_labels_filtered = seed_labels[columns_to_keep]
+
+            # Export the filtered DataFrame to CSV
+            seed_labels_filtered.to_csv(combined_csv_path)
             print(
                 f"Saved combined hand labels and pseudo labels for seed {k} to "
                 f"{combined_csv_path}"

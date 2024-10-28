@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import yaml
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 
@@ -212,7 +212,7 @@ def process_predictions(
     standard_scorer_name: str = 'standard_scorer',
     generate_index: bool = False
 ) -> pd.DataFrame:
-    mask = preds_df.columns.get_level_values("coords").isin(["x", "y"])
+    mask = preds_df.columns.get_level_values("coords").isin(["x", "y", "zscore", "nll"])
     preds_df = preds_df.loc[:, mask]
     subselected_preds = preds_df.iloc[frame_idxs]
 
@@ -479,7 +479,7 @@ def format_filtered_eks_data(
         
         return df, new_headers
     
-    substrings_to_drop = ['zscore', 'likelihood']
+    substrings_to_drop = ['likelihood'] #, 'zscore']
     all_eks_output, header_rows = drop_columns(
         all_eks_output, header_rows, substrings_to_drop
     )
@@ -562,7 +562,7 @@ def run_kmeans_on_eks_output(
     
     prototype_frames = eks_data.iloc[prototype_indices]
 
-    return prototype_frames, header
+    return prototype_frames, header, prototype_indices
 
 
 def update_coordinates(valid_keypoints_path: str, clustered_frames_path: str) -> List[List[str]]:
@@ -582,7 +582,7 @@ def update_coordinates(valid_keypoints_path: str, clustered_frames_path: str) ->
 
     coords_row = ['coords']
     for col in clustered_data[2][1:]:
-        coords_row.append(col[0] if col.startswith(('x', 'y')) else col)
+        coords_row.append(col[0] if col.startswith(('x.', 'y.')) else col)
 
     updated_headers = headers + [coords_row]
     updated_data = updated_headers.copy()
@@ -605,7 +605,7 @@ def select_frames_strategy_pipeline(
     cfg_lp: dict,
     data_dir: str,
     source_dir: str,
-    frame_selection_path: str
+    frame_selection_path: str,
 ) -> str:
     """Run the frame selection pipeline and return the path of the final selected frames."""
     final_selected_frames_path = os.path.join(frame_selection_path, 'step_6_maskingNaN_file.csv')
@@ -687,7 +687,7 @@ def select_frames_strategy_pipeline(
     )
 
     eks_data_path = os.path.join(frame_selection_path, 'step_4_all_eks_output_low_stdev_frames.csv')
-    prototype_frames, header = run_kmeans_on_eks_output(eks_data_path, n_clusters=1000)
+    prototype_frames, header, _ = run_kmeans_on_eks_output(eks_data_path, n_clusters=1000)
 
     kmeans_frames_path = os.path.join(frame_selection_path, 'step_5_kmeans_prototype_frames.csv')
     with open(kmeans_frames_path, 'w') as f:
